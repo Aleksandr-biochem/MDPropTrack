@@ -253,6 +253,10 @@ class PropertyAnalyser:
 
 		# extract properties from trajectories
 		if self.trj is not None:
+
+			if self.funcs is None:
+				raise Exception(f"Trajectiries supplied without functions for anaysis. Provide `func` argument")
+
 			self._analyse_trjs(
 				tu = tu,
 				step = step,
