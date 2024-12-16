@@ -82,13 +82,18 @@ class PropertyAnalyser:
 	
 		return checked_var
 
-	def _read_edrs(self, tu):
+	def _read_edrs(self, tu, sequential):
 		"""
 		Read data from edr files and 
 		append it to self.data
 
 		tu - str, time units option, ns or ps
 		
+		sequential - bool, if True then supplied files
+		are considered sequential step and the Time 
+		is adjusted accordingly
+		deffault, True
+
 		Returns self
 		"""
 
@@ -105,10 +110,11 @@ class PropertyAnalyser:
 			if tu == 'ns':
 				df['Time'] = df['Time'] / 1000
 				
-			# update time
-			step_duration = df.Time.iloc[-1]
-			df['Time'] += end_time
-			end_time += step_duration
+			# update time for sequential steps
+			if sequential:
+				step_duration = df.Time.iloc[-1]
+				df['Time'] += end_time
+				end_time += step_duration
 			
 			# add step_name column
 			df['Step_name'] = edr.split('/')[-1][:-4]
@@ -152,14 +158,21 @@ class PropertyAnalyser:
 		
 		return trj_dat
 		
-	def _analyse_trjs(self, tu, step, verbose):
+	def _analyse_trjs(self, tu, step, verbose, sequential):
 		"""
 		Calculate properties along the trajectories
 		and appends them to self.data
 		
 		tu - str, time units to use, 'ns' or 'ps'
+		
 		step - int, step for trajectory analysis
+
 		verbose - bool, report trajectory analysis progress
+
+		sequential - bool, if True then supplied files
+		are considered sequential step and the Time 
+		is adjusted accordingly
+		deffault, True
 		
 		Returns self	
 		"""
@@ -191,12 +204,13 @@ class PropertyAnalyser:
 				verbose = verbose
 			)
 			
-			# adjust time
-			trj_dat['Time'] = trj_dat['Time'] / t_norm
-			system.trajectory[-1]
-			step_duration = system.trajectory.time / t_norm
-			trj_dat['Time'] += end_time
-			end_time += step_duration
+			# adjust time for sequential steps
+			if sequential:
+				trj_dat['Time'] = trj_dat['Time'] / t_norm
+				system.trajectory[-1]
+				step_duration = system.trajectory.time / t_norm
+				trj_dat['Time'] += end_time
+				end_time += step_duration
 			
 			# add step_name column
 			trj_dat['Step_name'] = trj.split('/')[-1][:-4]
@@ -221,7 +235,7 @@ class PropertyAnalyser:
 		
 		return self
 	
-	def extract_properties(self, tu='ns', step=1, verbose=False):
+	def extract_properties(self, tu='ns', step=1, sequential=True, verbose=False):
 		"""
 		Extract data from edr and/or trj files
 		
@@ -233,6 +247,11 @@ class PropertyAnalyser:
 		step - int, step for trajectory analysis
 		default 1
 		
+		sequential - bool, if True then supplied files
+		are considered sequential step and the Time 
+		is adjusted accordingly
+		deffault, True
+
 		verbose - bool, show traj analysis progress
 		default False
 		
@@ -249,7 +268,10 @@ class PropertyAnalyser:
 		
 		# extract properties from edr
 		if self.edr is not None:
-			self._read_edrs(tu = tu)
+			self._read_edrs(
+				tu = tu,
+				sequential = sequential
+			)
 
 		# extract properties from trajectories
 		if self.trj is not None:
@@ -260,6 +282,7 @@ class PropertyAnalyser:
 			self._analyse_trjs(
 				tu = tu,
 				step = step,
+				sequential = sequential, 
 				verbose = verbose
 			)
 		
