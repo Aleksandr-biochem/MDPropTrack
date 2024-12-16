@@ -420,6 +420,7 @@ class LipidPropertyCalculator:
 		lipid_sel - str, MDAnalysis selection for lipid group analysis
 		
 		leaflet - int, leaflets to use for property averaging 
+		Valied for CalcAreaPerLipid
 		-1 - lower
 		1  - upper
 		0  - both
@@ -450,7 +451,7 @@ class LipidPropertyCalculator:
 		)
 		leaflets.run(
 			step = step,
-			verbose = verbose,
+			verbose = verbose
 		)
 		
 		# compute apl
@@ -461,7 +462,7 @@ class LipidPropertyCalculator:
 		)
 		apl.run(
 			step = step,
-			verbose = verbose,
+			verbose = verbose
 		)
 
 		# choose the leaflet(s) to compute metrics for
@@ -478,3 +479,45 @@ class LipidPropertyCalculator:
 		
 		return apl_by_frame
 	
+	def CalcBilayerThickness(self, system, step=1, verbose=False):
+		"""
+		Calculate average bilayer thickness over trajectory 
+
+		system - MDAnalysis Universe, trajectory for analysis
+		step - int, step for trajectory analysis
+		verbose - bool, report trajectory analysis progress
+
+		Returns
+		list(floats)
+		"""
+
+		# binning 
+		n_bins_leaflets  = int(system.dimensions[0] // 10)
+		n_bins_thickness = int(system.dimensions[0] // 20)
+		
+		# assign leaflets
+		leaflets = lpp.leaflets.assign_leaflets.AssignLeaflets(
+		  universe = system,
+		  lipid_sel = self.lipid_sel,
+		  n_bins = n_bins_leaflets 
+		)
+		
+		leaflets.run(
+			step = step,
+			verbose = verbose
+		)
+
+		# compute thickness
+		memb_thickness = lpp.analysis.MembThickness(
+			universe = system,
+		 	leaflets = leaflets.leaflets,
+			lipid_sel = self.lipid_sel,
+			n_bins = n_bins_thickness
+		)
+
+		memb_thickness.run(
+			step = step,
+			verbose = verbose
+		)
+
+		return memb_thickness.memb_thickness
