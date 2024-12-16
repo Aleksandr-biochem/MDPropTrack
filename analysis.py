@@ -41,14 +41,14 @@ class PropertyAnalyser:
 
 		# functions to be applied along the trajectory
 		self.funcs = funcs
-		self.func_names = func_names
+		self.func_names = self._check_type(func_names)
 
 		####################
 		# transformations for trajectories
 		# self.transformations
 		####################
 		
-		# pandas DataFrame with all the data 
+		# pandas DataFrame with extracted data
 		self.data = None
 		
 	def _check_type(self, var):
@@ -90,9 +90,8 @@ class PropertyAnalyser:
 		tu - str, time units option, ns or ps
 		
 		sequential - bool, if True then supplied files
-		are considered sequential step and the Time 
-		is adjusted accordingly
-		deffault, True
+		are considered sequential steps and `Time` 
+		is adjusted accordingly, deffault True
 
 		Returns self
 		"""
@@ -142,6 +141,12 @@ class PropertyAnalyser:
 		trj_dat = {
 			'Time': [ts.time for ts in system.trajectory[::step]]
 		}
+
+		# return default property names if none supplied
+		if self.func_names is None:
+			self.func_names = [
+				f"Prop{i}" for i in range(1, len(self.funcs) + 1)
+			]
 
 		# apply each function to the trajectory
 		for n, func in enumerate(self.funcs):
@@ -277,7 +282,7 @@ class PropertyAnalyser:
 		if self.trj is not None:
 
 			if self.funcs is None:
-				raise Exception(f"Trajectiries supplied without functions for anaysis. Provide `func` argument")
+				raise Exception(f"`func` argument is required for trajectory analysis")
 
 			self._analyse_trjs(
 				tu = tu,
