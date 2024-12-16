@@ -13,7 +13,7 @@ class PropertyAnalyser:
 	from edr files and/or trajectories
 	"""
 
-	def __init__(self, edr=None, trj=None, topol=None, funcs=None, func_names=None):
+	def __init__(self, edr=None, trj=None, topol=None, funcs=None, func_names=None, transformations=None):
 		"""
 		edr - str or list(str), path or list of paths
 		to edr files in a sequential order
@@ -32,6 +32,11 @@ class PropertyAnalyser:
 		
 		func_names - list(str), names for the properties
 		computed by funcs
+
+		transformations - list(MDAnalysis.transformations)
+		transformations workflow to apply to all trajectories
+		see following for examples
+		https://www.mdanalysis.org/2020/03/09/on-the-fly-transformations/
 		"""
 
 		# energy and trajectory files for analysis
@@ -43,10 +48,8 @@ class PropertyAnalyser:
 		self.funcs = funcs
 		self.func_names = self._check_type(func_names)
 
-		####################
 		# transformations for trajectories
-		# self.transformations
-		####################
+		self.transformations = transformations
 		
 		# pandas DataFrame with extracted data
 		self.data = None
@@ -197,9 +200,11 @@ class PropertyAnalyser:
 			system = mda.Universe(trj) if self.topol is None \
 					 else mda.Universe(self.topol[0], trj)
 
-			#################
-			# apply transformations
-			################# 
+			# apply if any transformations
+			if self.transformations is not None:
+				system.trajectory.add_transformations(
+					*self.transformations
+				)			
 
 			# calculate properties over the trajectory
 			trj_dat = self._apply_funcs_trj(
