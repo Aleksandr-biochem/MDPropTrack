@@ -6,6 +6,7 @@ from tqdm import tqdm
 import MDAnalysis as mda
 import lipyphilic as lpp
 import matplotlib.pyplot as plt
+from MDAnalysis import transformations
 
 class PropertyAnalyser:
 	"""
@@ -13,7 +14,16 @@ class PropertyAnalyser:
 	from edr files and/or trajectories
 	"""
 
-	def __init__(self, edr=None, trj=None, topol=None, funcs=None, func_names=None, transformations=None):
+	def __init__(
+		self,
+		edr=None,
+		trj=None,
+		topol=None,
+		funcs=None,
+		func_names=None,
+		center_group='protein',
+		rot_trans_group='protein'
+	):
 		"""
 		edr - str or list(str), path or list of paths
 		to edr files in a sequential order
@@ -33,10 +43,9 @@ class PropertyAnalyser:
 		func_names - list(str), names for the properties
 		computed by funcs
 
-		transformations - list(MDAnalysis.transformations)
-		transformations workflow to apply to all trajectories
-		see following for examples
-		https://www.mdanalysis.org/2020/03/09/on-the-fly-transformations/
+		transformation arguments
+		center_group - str, atom selection to center in the box
+		rot_trans_group - str, atom selection to fit alonmg the trj
 		"""
 
 		# energy and trajectory files for analysis
@@ -48,8 +57,9 @@ class PropertyAnalyser:
 		self.funcs = funcs
 		self.func_names = self._check_type(func_names)
 
-		# transformations for trajectories
-		self.transformations = transformations
+		# transformation arguments
+		self.center_group = center_group
+		self.rot_trans_group = rot_trans_group
 		
 		# pandas DataFrame with extracted data
 		self.data = None
@@ -84,6 +94,39 @@ class PropertyAnalyser:
 			raise Exception(f"input should be str or list(str)")
 	
 		return checked_var
+
+	def _get_transformations(self, system):
+		"""
+		Define transformations for the trajectory
+		
+		system - MDAnalysis Universe
+		"""
+
+		# unwrap atoms by default
+		ag = system.atoms
+		workflow = [transformations.unwrap(ag)]
+
+		# check additional transformation groups
+		if self.center_group is not None:
+			center_group = system.select_atoms(self.center_group)
+
+		if self.rot_trans_group is not None:
+			fit_group = system.select_atoms(self.rot_trans_group)
+		
+		# add centering
+		if len(center_group.atoms) > 0:
+			workflow.extend([
+				transformations.center_in_box(center_group),
+				transformations.wrap(ag, compound='residues')
+			])	
+
+		# add rotation and translation
+		if len(fit_group.atoms) > 0:
+			workflow.extend([
+				transformations.fit_rot_trans(fit_group, fit_group)
+			])
+
+		return workflow
 
 	def _read_edrs(self, tu, sequential):
 		"""
@@ -200,11 +243,35 @@ class PropertyAnalyser:
 			system = mda.Universe(trj) if self.topol is None \
 					 else mda.Universe(self.topol[0], trj)
 
-			# apply if any transformations
-			if self.transformations is not None:
-				system.trajectory.add_transformations(
-					*self.transformations
-				)			
+			# add transformations
+			# # unwrap atoms by default
+			# ag = system.atoms
+			# workflow = [transformations.unwrap(ag)]
+
+			# # check additional transformation groups
+			# if self.center_group is not None:
+			# 	center_group = system.select_atoms(self.center_group)
+
+			# if self.rot_trans_group is not None:
+			# 	fit_group = system.select_atoms(self.rot_trans_group)
+			
+			# # add centering
+			# if len(center_group.atoms) > 0:
+			# 	workflow.extend([
+			# 		transformations.center_in_box(center_group),
+			# 		transformations.wrap(ag, compound='residues')
+			# 	])	
+
+			# # add rotation and translation
+			# if len(fit_group.atoms) > 0:
+			# 	workflow.extend([
+			# 		transformations.fit_rot_trans(fit_group, fit_group)
+			# 	])
+		
+			# system.trajectory.add_transformations(*workflow)
+			system.trajectory.add_transformations(
+				*self._get_transformations(system)
+			)
 
 			# calculate properties over the trajectory
 			trj_dat = self._apply_funcs_trj(
