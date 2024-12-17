@@ -680,13 +680,17 @@ class ProteinPropertyCalculator:
 	key protein properties from the trajectory
 	"""
 
-	def __init__(self, protein_sel):
+	def __init__(self, protein_sel, fit_sel):
 		"""
 		Class atributes hold parameters to be used in methods
 
-		protein_sel - str, MDAnalysis selection for protein group for analysis
+		protein_sel - str, MDAnalysis atom selection 
+		for protein group for analysis
+		
+		fit_sel - str, atom selection for superimposition in CalcRMSD
 		"""
 		self.protein_sel = protein_sel
+		self.fit_sel = fit_sel
 
 	def CalcGyrationRadius(self, system, step=1, verbose=False):
 		"""
@@ -715,3 +719,36 @@ class ProteinPropertyCalculator:
 			)
 
 		return Rg_by_frame
+
+	def CalcRMSD(self, system, step=1, verbose=False):
+		"""
+		Calculate RMSD for a group 
+
+		system - MDAnalysis Universe, trajectory for analysis
+		step - int, step for trajectory analysis
+		verbose - bool, report trajectory analysis progress
+
+		Also requires:
+		self.protein_sel - atom selection for RMSD calculation
+		self.fit_sel - atom selection for superimposition
+
+		Returns
+		list(floats)
+		"""
+
+		ref = system.copy()
+
+		rms = mda.analysis.rms.RMSD(
+			system,
+			ref,
+			select = self.fit_sel,
+			center = True,
+			groupselections = [self.protein_sel]
+		) 
+
+		rms.run(
+			step = step,
+			verbose = True
+		)
+
+		return rms.rmsd[:, -1]
