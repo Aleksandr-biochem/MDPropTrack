@@ -126,7 +126,7 @@ class PropertyAnalyser:
 			
 		return self
 
-	def _apply_funcs_trj(self, system, tu, step, verbose):
+	def _apply_funcs_trj(self, system, step, verbose):
 		"""
 		Apply all functions to the trajectory
 		Returns calculated properties as pd.DataFrame
@@ -209,18 +209,15 @@ class PropertyAnalyser:
 			# calculate properties over the trajectory
 			trj_dat = self._apply_funcs_trj(
 				system = system,
-				tu = tu,
 				step = step,
 				verbose = verbose
 			)
 			
-			# adjust time for sequential steps
+			# shift time for sequential steps
 			if sequential:
-				trj_dat['Time'] = trj_dat['Time'] / t_norm
 				system.trajectory[-1]
-				step_duration = system.trajectory.time / t_norm
 				trj_dat['Time'] += end_time
-				end_time += step_duration
+				end_time += system.trajectory.time
 			
 			# add step_name column
 			trj_dat['Step_name'] = trj.split('/')[-1][:-4]
@@ -231,6 +228,9 @@ class PropertyAnalyser:
 		# concatenate data from all trajectories
 		trj_dat_combined = pd.concat(trj_dat_combined).reset_index(drop=True)
 		
+		# adjust time units
+		trj_dat_combined['Time'] = trj_dat_combined['Time'] / t_norm
+
 		# bind trj_data do self.data on time
 		if self.data is not None:
 			self.data = pd.merge(
@@ -239,6 +239,7 @@ class PropertyAnalyser:
 				on = ['Time', 'Step_name'],
 				how = 'outer'
 			)
+
 		# of just save trj data as self.data
 		else:
 			self.data = trj_dat_combined
