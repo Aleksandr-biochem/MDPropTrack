@@ -426,12 +426,15 @@ class LipidPropertyCalculator:
 	key lipid properties from the trajectory
 	"""
 
-	def __init__(self, lipid_sel, leaflet=0):
+	def __init__(self, lipid_sel=None, tail_sel=None, leaflet=0):
 		"""
 		Class atributes hold parameters to be used in methods
 
-		lipid_sel - str, MDAnalysis selection for lipid group analysis
+		lipid_sel - str, MDAnalysis selection for lipid group for analysis
 		
+		tail_sel - str, MDAnalysis selection for lipid tails
+		that will be used by CalcOrderParameter
+
 		leaflet - int, leaflets to use for property averaging 
 		Valied for CalcAreaPerLipid
 		-1 - lower
@@ -439,6 +442,7 @@ class LipidPropertyCalculator:
 		0  - both
 		"""
 		self.lipid_sel = lipid_sel
+		self.tail_sel = tail_sel
 		self.leaflet = leaflet
 
 	def CalcAreaPerLipid(self, system, step=1, verbose=False):
@@ -448,6 +452,12 @@ class LipidPropertyCalculator:
 		system - MDAnalysis Universe, trajectory for analysis
 		step - int, step for trajectory analysis
 		verbose - bool, report trajectory analysis progress
+
+		Also requires:
+		self.lipid_sel - atom selection for lipids in the bilayer.
+		Atoms used to identify leaflets.
+		These atoms will also be used to perform the Voronoi tessellation.
+		self.leaflet - leaflet(s) to perform averaging for 
 
 		Returns
 		list(floats)
@@ -499,6 +509,11 @@ class LipidPropertyCalculator:
 		system - MDAnalysis Universe, trajectory for analysis
 		step - int, step for trajectory analysis
 		verbose - bool, report trajectory analysis progress
+		
+		Also requires:
+		self.lipid_sel - atom selection for lipids in the bilayer.
+		Atoms used to identify leaflets.
+		These atoms will also be used to define thickness.
 
 		Returns
 		list(floats)
@@ -534,3 +549,102 @@ class LipidPropertyCalculator:
 		)
 
 		return memb_thickness.memb_thickness
+
+	def CalcOrderParameter(self, system, step=1, verbose=False):
+		"""
+		Calculate average orientational order parameter
+		of lipid tails over trajectory 
+
+		system - MDAnalysis Universe, trajectory for analysis
+		step - int, step for trajectory analysis
+		verbose - bool, report trajectory analysis progress
+
+		Also requires:
+		self.tail_sel - atom selection(s) for lipid tails for 
+		order parameter calculation
+
+		Returns
+		list(floats)
+		"""
+
+		# number of selections to work with?
+		if isinstance(self.tail_sel, list):
+			sn1_sel, sn2_sel = self.tail_sel
+		else:
+			sn1_sel = self.tail_sel
+			sn2_sel = None
+
+		# run analysis for SN1 tail
+		scc_sn1 = lpp.analysis.order_parameter.SCC(
+			universe = system,
+			tail_sel = sn1_sel
+		)
+
+		scc_sn1.run(
+			step = step,
+			verbose = verbose
+		)
+
+		# run for SN2 tail if any 
+		# and return weighted average
+		if sn2_sel is not None:
+
+			scc_sn2 = lpp.analysis.order_parameter.SCC(
+				universe = system,
+				tail_sel = sn2_sel
+			)
+
+			scc_sn2.run(
+				step = step,
+				verbose = verbose
+			)
+
+			scc_av = lpp.analysis.order_parameter.SCC.weighted_average(scc_sn1, scc_sn2)
+			mean_order_parameters = np.nanmean(scc_av.SCC, axis=0)
+		
+		else:
+			mean_order_parameters = np.nanmean(scc_sn1.SCC, axis=0)
+
+		return mean_order_parameters
+
+class ProteinPropertyCalculator:
+	"""
+	A class of with methods to calculate
+	key protein properties from the trajectory
+	"""
+
+	def __init__(self, protein_sel):
+		"""
+		Class atributes hold parameters to be used in methods
+
+		protein_sel - str, MDAnalysis selection for protein group for analysis
+		"""
+		self.protein_sel = protein_sel
+
+	def CalcGyrationRadius(self, system, step=1, verbose=False):
+		"""
+		Calculate radius of gyration along the trajectory
+
+		system - MDAnalysis Universe, trajectory for analysis
+		step - int, step for trajectory analysis
+		verbose - bool, report trajectory analysis progress
+
+		Also requires:
+		self.protein_sel - atom selection for Rg calculation
+
+		Returns
+		list(floats)
+		"""
+
+		# make selection 
+		prot_selection = system.select_atoms(self.protein_sel)
+
+		# iterate over trj and calculate R
+		Rg_by_frame = []
+		iterator = system.trajectory[::step]	
+		for ts in (tqdm(iterator) if verbose else iterator):
+			Rg_by_frame.append(
+				prot_selection.radius_of_gyration()			
+			)
+
+		return Rg_by_frame
