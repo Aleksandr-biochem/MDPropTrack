@@ -339,6 +339,7 @@ class PropertyAnalyser:
 		
 	def plot(self,
 			 properties_to_plot = ['Potential', 'Temperature', 'Pressure', 'Volume'],
+			 labels = None,
 			 x_lab='Time, ns',
 			 cmap='Set1',
 			 figure_kwargs=None, 
@@ -351,12 +352,15 @@ class PropertyAnalyser:
 		Only works with column names from self.data
 		default list: 'Total Energy', 'Temperature', 'Pressure', 'Volume'
 		
+		labels - list(str), list of cunstom names for plotted steps
+
 		x_lab - str, x axis label, defalut 'Time, ns'
 		
 		figure_kwargs - dict, matplotlib figure kwargs
 		These can be used to adjust output subplot
 		
 		style_kwargs - dict, seaborn style kwargs
+
 		sns_kwargs - dict, seaborn lineplot kwargs
 		
 		Returns:
@@ -396,7 +400,15 @@ class PropertyAnalyser:
 					ax = axs[i],
 					**sns_kwargs
 				)
-			
+				
+				# change labels if requested
+				if labels is not None:
+					handles, previous_labels = axs[i].get_legend_handles_labels()
+					axs[i].legend(
+						handles = handles,
+						labels = labels
+					)
+
 				# set title and axes labels 
 				axs[i].set_title(prop, fontweight='bold', fontsize=18, pad=10)
 				axs[i].set_xlabel(x_lab, fontsize=15, labelpad=10)
