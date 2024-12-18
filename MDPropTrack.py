@@ -42,6 +42,13 @@ def ParseArguments():
 		type = str
 	)
 
+	parser.add_argument(
+		"-o",
+		"--output",
+		help = """Otput figure. E.g. 'save/as/multiplot.jpg'""",
+		type = str
+	)
+
 	### TRAJECTORY ANALYSIS PARAMETERS ###
 
 	parser.add_argument(
