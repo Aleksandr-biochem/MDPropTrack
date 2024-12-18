@@ -242,31 +242,6 @@ class PropertyAnalyser:
 			# load trajectory
 			system = mda.Universe(trj) if self.topol is None \
 					 else mda.Universe(self.topol[0], trj)
-
-			# add transformations
-			# # unwrap atoms by default
-			# ag = system.atoms
-			# workflow = [transformations.unwrap(ag)]
-
-			# # check additional transformation groups
-			# if self.center_group is not None:
-			# 	center_group = system.select_atoms(self.center_group)
-
-			# if self.rot_trans_group is not None:
-			# 	fit_group = system.select_atoms(self.rot_trans_group)
-			
-			# # add centering
-			# if len(center_group.atoms) > 0:
-			# 	workflow.extend([
-			# 		transformations.center_in_box(center_group),
-			# 		transformations.wrap(ag, compound='residues')
-			# 	])	
-
-			# # add rotation and translation
-			# if len(fit_group.atoms) > 0:
-			# 	workflow.extend([
-			# 		transformations.fit_rot_trans(fit_group, fit_group)
-			# 	])
 		
 			# system.trajectory.add_transformations(*workflow)
 			system.trajectory.add_transformations(
