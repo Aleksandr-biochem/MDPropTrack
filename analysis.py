@@ -414,12 +414,6 @@ class PropertyAnalyser:
 		Returns
 		"""
 
-		# a different averaging
-		# f = np.zeros(y.shape)
-		# for yy in y:
-		#	f += autocorr_func_1d(yy)
-		# f /= len(y)
-
 		# get acf estimate
 		f = self._get_autocorr_func_1d(y)
 		
@@ -429,31 +423,16 @@ class PropertyAnalyser:
 		
 		return taus[window]
 
-	def plot_convergence(
-		self,
-		prop,
-		x_lab='Simulation time',
-		figure_kwargs=None,
-		style_kwargs={"style": "darkgrid", "rc": {"grid.color": ".6", "grid.linestyle": ":"}},
-		sns_kwargs={'marker': 'o'}
-		):
+	def _estimate_convergence(self, prop):
 		"""
-		Plot autocorrelation time (tau) vs simulation length
+		Estimate autocorrelation time (tau) vs simulation length
 		to assess convergence
 
 		prop - str, property name from self.data 
-		
-		x_lab - str, x axis label, defalut 'Time, ns'
-		
-		figure_kwargs - dict, matplotlib figure kwargs
-		These can be used to adjust output subplot
-		
-		style_kwargs - dict, seaborn style kwargs
-
-		sns_kwargs - dict, seaborn lineplot kwargs
 
 		Returns 
-		matplotlib figure object
+		two np.array(float)
+		array of time points and taus 
 		"""
 
 		# get the time-series values
@@ -467,30 +446,11 @@ class PropertyAnalyser:
 		ts = self.data['Time'].values[N - 1]
 
 		# estimate tau from trj slices
-		tau_data = [
+		tau_data = np.array([
 			self._estimate_autocorr_tau(dat[:n]) for n in N
-		]
+		])
 		
-		# create plot
-		# apply seaborn style to the plot
-		with sns.axes_style(**style_kwargs):
-	
-			fig, axs = self._construct_multiplot(
-				n_prop = 1,
-				figure_kwargs = figure_kwargs
-			)
-
-			sns.lineplot(
-					x = ts,
-					y = tau_data,
-					ax = axs[0],
-					**sns_kwargs
-				)
-			
-			# set title and axes labels 
-			axs[0].set_title(prop, fontweight='bold', fontsize=18, pad=10)
-			axs[0].set_xlabel(x_lab, fontsize=15, labelpad=10)
-			axs[0].set_ylabel(r"Autocorrelation time $\tau$",  fontsize=15, labelpad=10)
+		return ts, tau_data
 
 	##################################
 	
@@ -534,8 +494,9 @@ class PropertyAnalyser:
 		return fig, axs
 		
 	def plot(self,
-			 properties_to_plot = ['Potential', 'Temperature', 'Pressure', 'Volume'],
-			 labels = None,
+			 properties_to_plot=['Potential', 'Temperature', 'Pressure', 'Volume'],
+			 plot_convergence=False,
+			 labels=None,
 			 x_lab='Time, ns',
 			 cmap='Set1',
 			 figure_kwargs=None, 
@@ -586,29 +547,50 @@ class PropertyAnalyser:
 				
 			# plot each property on a different subplot
 			for i, prop in enumerate(prop_list):
-			
-				sns.lineplot(
-					data = self.data,
-					x = 'Time',
-					y = prop,
-					hue = 'Step_name',
-					palette = cmap,
-					ax = axs[i],
-					**sns_kwargs
-				)
 				
-				# change labels if requested
-				if labels is not None:
-					handles, previous_labels = axs[i].get_legend_handles_labels()
-					axs[i].legend(
-						handles = handles,
-						labels = labels
+				# for convergence
+				if plot_convergence:
+					ts, tau_data = self._estimate_convergence(prop)
+
+					sns.lineplot(
+						x = ts,
+						y = tau_data,
+						ax = axs[i],
+						marker='o',
+						**sns_kwargs
 					)
+
+					axs[i].set_ylabel(
+						r"Autocorrelation time $\tau$", 
+						fontsize=15,
+						labelpad=10
+					)
+
+				# for regular time plots
+				else:
+					sns.lineplot(
+						data = self.data,
+						x = 'Time',
+						y = prop,
+						hue = 'Step_name',
+						palette = cmap,
+						ax = axs[i],
+						**sns_kwargs
+					)
+					
+					# change labels if requested
+					if labels is not None:
+						handles, previous_labels = axs[i].get_legend_handles_labels()
+						axs[i].legend(
+							handles = handles,
+							labels = labels
+						)
+
+					axs[i].set_ylabel(prop,  fontsize=15, labelpad=10)
 
 				# set title and axes labels 
 				axs[i].set_title(prop, fontweight='bold', fontsize=18, pad=10)
 				axs[i].set_xlabel(x_lab, fontsize=15, labelpad=10)
-				axs[i].set_ylabel(prop,  fontsize=15, labelpad=10)
 	
 		plt.tight_layout()
 		
