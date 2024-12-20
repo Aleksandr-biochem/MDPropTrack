@@ -240,6 +240,9 @@ class PropertyAnalyser:
 		# iterate over trajectories 
 		for trj in self.trj:
 
+			if verbose:
+				print(f"Loading and transforming {trj}...")
+
 			# load trajectory
 			system = mda.Universe(trj) if self.topol is None \
 					 else mda.Universe(self.topol[0], trj)
