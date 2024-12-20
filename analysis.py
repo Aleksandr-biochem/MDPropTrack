@@ -12,6 +12,7 @@ class PropertyAnalyser:
 	"""
 	Extract properties of a simulation system
 	from edr files and/or trajectories
+	and analyse convergence
 	"""
 
 	def __init__(
@@ -341,6 +342,158 @@ class PropertyAnalyser:
 		
 		return self
 
+	################################
+	# The following group of methods for convergence assessment
+	# is implemented with the code adapted from
+	# https://emcee.readthedocs.io/en/stable/tutorials/autocorr/
+	# Copyright 2012-2021, Dan Foreman-Mackey & contributors
+
+	def _get_next_pow_two(self, n):
+		"""
+		Return right nearest 
+		int that is power of 2
+		"""
+		i = 1
+		while i < n:
+			i = i << 1
+		return i
+
+	def _get_autocorr_func_1d(self, y, norm=True):
+		"""
+		Estimate autocorrelation function from
+		time series data using one-dimensional
+		discrete Fourier Transform
+		
+		y - np.array(floats), time series data
+		norm - bool, normalise acf, default True
+
+		Returns
+		np.array(floats) empirical acf values
+		""" 
+
+		n = self._get_next_pow_two(len(y))
+
+		# Compute the FFT and then
+		# the auto-correlation function
+		f = np.fft.fft(y - np.mean(y), n = (2 * n))
+		acf = np.fft.ifft(f * np.conjugate(f))[: len(y)].real
+		acf /= 4 * n
+
+		# Normilise if requested
+		if norm:
+			acf /= acf[0]
+
+		return acf
+	
+	def _auto_window(self, taus, c):
+		"""
+		Automated windowing procedure following Sokal (1989)
+		
+		taus - np.array of tau estimates
+		c - float, coefficient in tau estimation
+
+		Return
+		int, window number
+		"""
+		m = np.arange(len(taus)) < c * taus
+		if np.any(m):
+			window = np.argmin(m)
+		else:
+			window = len(taus) - 1
+		return window
+
+	def _estimate_autocorr_tau(self, y, c=5.0):
+		"""
+		Estimate autocorrelation time tau
+		from time-series
+		
+		y - np.array(floats), time series data
+		c - float, coefficient in tau estimation
+		default 0.5
+
+		Returns
+		"""
+
+		# a different averaging
+		# f = np.zeros(y.shape)
+		# for yy in y:
+		#	f += autocorr_func_1d(yy)
+		# f /= len(y)
+
+		# get acf estimate
+		f = self._get_autocorr_func_1d(y)
+		
+		# compute and return tau estimate
+		taus = 2.0 * np.cumsum(f) - 1.0
+		window = self._auto_window(taus, c)
+		
+		return taus[window]
+
+	def plot_convergence(
+		self,
+		prop,
+		x_lab='Simulation time',
+		figure_kwargs=None,
+		style_kwargs={"style": "darkgrid", "rc": {"grid.color": ".6", "grid.linestyle": ":"}},
+		sns_kwargs={'marker': 'o'}
+		):
+		"""
+		Plot autocorrelation time (tau) vs simulation length
+		to assess convergence
+
+		prop - str, property name from self.data 
+		
+		x_lab - str, x axis label, defalut 'Time, ns'
+		
+		figure_kwargs - dict, matplotlib figure kwargs
+		These can be used to adjust output subplot
+		
+		style_kwargs - dict, seaborn style kwargs
+
+		sns_kwargs - dict, seaborn lineplot kwargs
+
+		Returns 
+		matplotlib figure object
+		"""
+
+		# get the time-series values
+		dat = self.data[prop].values
+
+		# generate step points and
+		# time points for tau estimates
+		N = np.exp(
+			np.linspace(np.log(100), np.log(dat.shape[0]), 10)
+		).astype(int)
+		ts = self.data['Time'].values[N - 1]
+
+		# estimate tau from trj slices
+		tau_data = [
+			self._estimate_autocorr_tau(dat[:n]) for n in N
+		]
+		
+		# create plot
+		# apply seaborn style to the plot
+		with sns.axes_style(**style_kwargs):
+	
+			fig, axs = self._construct_multiplot(
+				n_prop = 1,
+				figure_kwargs = figure_kwargs
+			)
+
+			sns.lineplot(
+					x = ts,
+					y = tau_data,
+					ax = axs[0],
+					**sns_kwargs
+				)
+			
+			# set title and axes labels 
+			axs[0].set_title(prop, fontweight='bold', fontsize=18, pad=10)
+			axs[0].set_xlabel(x_lab, fontsize=15, labelpad=10)
+			axs[0].set_ylabel(r"Autocorrelation time $\tau$",  fontsize=15, labelpad=10)
+
+	##################################
+	
 	def _construct_multiplot(self, n_prop, figure_kwargs):
 		"""
 		Construct subplot
