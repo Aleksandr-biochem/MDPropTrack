@@ -1,15 +1,9 @@
 #! /usr/bin/env python
 
 import argparse
-# from MDPropTrack.analysis import PropertyAnalyser
-# from MDPropTrack.analysis import LipidPropertyCalculator, ProteinPropertyCalculator
+from MDPropTrack.analysis import PropertyAnalyser
+from MDPropTrack.analysis import LipidPropertyCalculator, ProteinPropertyCalculator
 import matplotlib.pyplot as plt
-
-######################################
-import sys
-sys.path.append('/khalid/k023/sann7918/Documents/tools/MDPropTrack')
-from analysis import *
-######################################
 
 def ParseArguments():
 	"""
@@ -197,11 +191,14 @@ def DefineFuncs(args):
 
 	return funcs, func_names
 
-def main(args):
+def main():
 	"""
 	MDPropTrack run ./	
 	args - arguments parsed by ParseArguments()
 	"""
+
+	# parse arguments
+	args = ParseArguments()
 
 	# define functions for trajectory analysis
 	funcs, func_names = DefineFuncs(args)
@@ -256,9 +253,4 @@ def main(args):
 if __name__ == "__main__":
 	
 	# launch as a command-line tool
-
-	# parse arguments
-	arguments = ParseArguments()
-
-	# run analysis and plotting
-	main(arguments)
+	main()
