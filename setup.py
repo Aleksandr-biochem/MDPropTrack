@@ -14,9 +14,9 @@ setup(
         "pandas>=2.0.0",
         "MDAnalysis>=2.7.0",
         "panedr>=0.8.0",
-        "seaborn>=0.13.2",
-        "matplotlib>=3.10.0",
-        "tqdm>=4.67.1"
+        "seaborn>=0.13.0",
+        "matplotlib>=3.8.0",
+        "tqdm>=4.66.1"
     ],
     entry_points={
         "console_scripts": [
