@@ -37,7 +37,7 @@ def ParseArguments():
 	parser.add_argument(
 		"-p",
 		"--topol",
-		help = """Path to topology file, almost always 
+		help = """Path to topology file, usually 
 		neccessary for trajectory analysis""",
 		type = str
 	)
@@ -98,7 +98,7 @@ def ParseArguments():
 	parser.add_argument(
 		"--apl",
 		help = """Average area per lipid. Provide lipid selection for leaflet identification
-		And Voronoi tesselation. E.g. 'name PO4' for MARTINI phospholipids.""",
+		and Voronoi tesselation. E.g. 'name PO4' for MARTINI phospholipids.""",
 		type = str
 	)
 
@@ -135,10 +135,16 @@ def ParseArguments():
 
 	parser.add_argument(
 		"--plot",
-		help = """Atom selection for rot-trans fit. Will override default list.
+		help = """Comma-separated list of properties to plot. Will override the default list.
 		Default: 'Potential,Temperature,Pressure,Volume' + requested trj properties.""",
 		default = 'Potential,Temperature,Pressure,Volume',
 		type = str
+	)
+
+	parser.add_argument(
+		"--plot_convergence",
+		help = """Plot autocorrelation time vs simulation time""",
+		action='store_true'
 	)
 
 	args = parser.parse_args()
@@ -190,6 +196,7 @@ def DefineFuncs(args):
 
 def main(args):
 	"""
+	MDPropTrack run 
 	args - arguments parsed by ParseArguments()
 	"""
 
@@ -225,6 +232,7 @@ def main(args):
 
 	pa.plot(
 		properties_to_plot = properties_to_plot,
+		plot_convergence=args.plot_convergence,
 		x_lab = f"Time, {args.tu}"
 	)
 
