@@ -1,6 +1,9 @@
 #! /usr/bin/env python
 
 import argparse
+# from MDPropTrack.analysis import PropertyAnalyser
+# from MDPropTrack.analysis import LipidPropertyCalculator, ProteinPropertyCalculator
+import matplotlib.pyplot as plt
 
 ######################################
 import sys
