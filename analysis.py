@@ -88,11 +88,11 @@ class PropertyAnalyser:
 			if False not in check_list:
 				checked_var = var
 			else: 
-				raise Exception(f"input should be str or list(str)")
+				raise Exception("input should be str or list(str)")
 				
 		# if neither then raise exception
 		else:
-			raise Exception(f"input should be str or list(str)")
+			raise Exception("input should be str or list(str)")
 	
 		return checked_var
 
@@ -334,7 +334,7 @@ class PropertyAnalyser:
 		if self.trj is not None:
 
 			if self.funcs is None:
-				raise Exception(f"`func` argument is required for trajectory analysis")
+				raise Exception("`func` argument is required for trajectory analysis")
 
 			self._analyse_trjs(
 				tu = tu,
