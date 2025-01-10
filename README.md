@@ -34,7 +34,7 @@ git clone git@github.com:Aleksandr-biochem/MDPropTrack.git
 cd MDPropTrack
 ```
 
-To install or update MDPropTrack into your environemnt use pip:
+To install or update MDPropTrack into your environment use pip:
 
 ```
 pip install .
@@ -96,7 +96,7 @@ mdpt -e file.edr -o plot.jpg
 # read 2 trajectories as inconsequent steps 
 # calculate backbone RMSD for chain A and Rg for protein
 # use time in ps when plotting
-mdpt -t file1.xtc,file2.xtc -p file1.tpr --sequential False -tu ps --rg 'protein' --rmsd 'backbone,backbone and chain A' -o plot.jpg 
+mdpt -t file1.xtc,file2.xtc -p file1.tpr -i -tu ps --rg 'protein' --rmsd 'backbone,backbone and chain A' -o plot.jpg 
 
 # read edrs and trajectories
 # center the DPPC bilayer
