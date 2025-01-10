@@ -34,17 +34,16 @@ class PropertyAnalyser:
 
 		topol - str, path to a topology file 
 		to facilitate MDAnalysis Universe loading
-		optional but may be required for your custom functions
+		usually required for your custom functions
 
 		funcs - list(functions),
 		list of functions to apply along the trajectory
 		Functions are expected to adhere to a specific input-output structure
-		See examples for details
 		
 		func_names - list(str), names for the properties
 		computed by funcs
 
-		transformation arguments
+		transformation arguments:
 		center_group - str, atom selection to center in the box
 		rot_trans_group - str, atom selection to fit alonmg the trj
 		"""
@@ -286,7 +285,7 @@ class PropertyAnalyser:
 				how = 'outer'
 			)
 
-		# of just save trj data as self.data
+		# or just save trj data as self.data
 		else:
 			self.data = trj_dat_combined
 		
@@ -459,7 +458,7 @@ class PropertyAnalyser:
 	
 	def _construct_multiplot(self, n_prop, figure_kwargs):
 		"""
-		Construct subplot
+		Construct subplot grid
 
 		n_prop - int, number of properties to plot
 		figure_kwargs - dict, matplotlib figure kwargs

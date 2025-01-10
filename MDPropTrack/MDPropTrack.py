@@ -194,8 +194,7 @@ def DefineFuncs(args):
 
 def main():
 	"""
-	MDPropTrack run ./	
-	args - arguments parsed by ParseArguments()
+	MDPropTrack run
 	"""
 
 	# parse arguments
