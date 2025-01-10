@@ -34,7 +34,7 @@ git clone git@github.com:Aleksandr-biochem/MDPropTrack.git
 cd MDPropTrack
 ```
 
-Install MDPropTrack into your environemnt using pip:
+To install or update MDPropTrack into your environemnt use pip:
 
 ```
 pip install .
