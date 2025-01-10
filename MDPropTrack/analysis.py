@@ -793,7 +793,7 @@ class ProteinPropertyCalculator:
 	key protein properties from the trajectory
 	"""
 
-	def __init__(self, protein_sel, fit_sel):
+	def __init__(self, protein_sel=None, fit_sel=None):
 		"""
 		Class atributes hold parameters to be used in methods
 
