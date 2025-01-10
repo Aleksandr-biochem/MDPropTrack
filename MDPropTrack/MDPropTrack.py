@@ -78,10 +78,11 @@ def ParseArguments():
 	)
 
 	parser.add_argument(
-		"--sequential",
-		help = """Treat files as sequential steps. Default True""",
-		default = True,
-		type = bool
+		"-i",
+		"--inconsequent",
+		help = """By default files are treated as sequential steps.
+		This flag will revert this.""",
+		action = 'store_true'
 	)
 
 	parser.add_argument(
@@ -206,8 +207,8 @@ def main():
 	# initiate PropertyAnalyser
 	pa = PropertyAnalyser(
 		
-		edr = args.edr.split(','),
-		trj = args.trj.split(','),
+		edr = args.edr if args.edr is None else args.edr.split(','),
+		trj = args.trj if args.trj is None else args.trj.split(','),
 		topol = args.topol,
 		
 		funcs = funcs,
@@ -221,7 +222,7 @@ def main():
 	pa.extract_properties(
 		tu = args.tu,
 		step = args.step,
-		sequential = args.sequential,
+		sequential = not args.inconsequent,
 		verbose = args.verbose
 	)
 
