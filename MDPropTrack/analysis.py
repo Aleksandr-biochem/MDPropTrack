@@ -919,7 +919,8 @@ class ProteinPropertyCalculator:
 		
 		fit_sel - str, atom selection for superimposition in CalcRMSD
 		"""
-		self.protein_sel = protein_sel
+		self.protein_sel = [protein_sel] if isinstance(protein_sel, str) \
+						   else protein_sel
 		self.fit_sel = fit_sel
 
 	def CalcGyrationRadius(self, system, step=1, verbose=False):
@@ -931,24 +932,26 @@ class ProteinPropertyCalculator:
 		verbose - bool, report trajectory analysis progress
 
 		Also requires:
-		self.protein_sel - atom selection for Rg calculation
+		self.protein_sel - one or multiple atom selections for Rg calculation
 
 		Returns
-		list(floats)
+		np.array(floats)
 		"""
 
-		# make selection 
-		prot_selection = system.select_atoms(self.protein_sel)
+		# make selection(s)
+		selections = [
+			system.select_atoms(sel) for sel in self.protein_sel
+		]
 
 		# iterate over trj and calculate R
 		Rg_by_frame = []
 		iterator = system.trajectory[::step]	
 		for ts in (tqdm(iterator) if verbose else iterator):
 			Rg_by_frame.append(
-				prot_selection.radius_of_gyration()			
+				[sel.radius_of_gyration() for sel in selections]
 			)
 
-		return Rg_by_frame
+		return np.array(Rg_by_frame)
 
 	def CalcRMSD(self, system, step=1, verbose=False):
 		"""
@@ -959,11 +962,11 @@ class ProteinPropertyCalculator:
 		verbose - bool, report trajectory analysis progress
 
 		Also requires:
-		self.protein_sel - atom selection for RMSD calculation
+		self.protein_sel - one or multiple atom selections for RMSD calculation
 		self.fit_sel - atom selection for superimposition
 
 		Returns
-		list(floats)
+		np.array(floats)
 		"""
 
 		ref = system.copy()
@@ -973,7 +976,7 @@ class ProteinPropertyCalculator:
 			ref,
 			select = self.fit_sel,
 			center = True,
-			groupselections = [self.protein_sel]
+			groupselections = self.protein_sel
 		) 
 
 		rms.run(
@@ -981,4 +984,4 @@ class ProteinPropertyCalculator:
 			verbose = True
 		)
 
-		return rms.rmsd[:, -1]
+		return rms.rmsd[:, -len(self.protein_sel)]
