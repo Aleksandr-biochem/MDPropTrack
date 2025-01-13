@@ -195,7 +195,7 @@ class PropertyAnalyser:
 		time2 = system.trajectory.time
 
 		# generate the times
-		trj_dat = np.arange(time1, time2 + dt, dt).reshape((-1, 1))
+		trj_dat = np.arange(time1, time2 + dt, dt * step).reshape((-1, 1))
 
 		# apply each function to the trajectory
 		for func in self.funcs:
@@ -676,7 +676,7 @@ class LipidPropertyCalculator:
 			verbose = verbose
 		)
 
-		self.leaflets = leaflets
+		self.leaflets = leaflets.leaflets
 
 		return self
 
@@ -765,19 +765,22 @@ class LipidPropertyCalculator:
 			leaflets = self.leaflets
 		)
 
+		if verbose:
+			print('Calculating area per lipid...')
+
 		apl.run(
 			step = step,
 			verbose = verbose
 		)
 
 		# choose the leaflet(s) to compute metrics for
-		if self.leaflet == 0:
+		if self.leaflet_to_average == 0:
 			leaflet_vals = [-1, 1]
 		else:
-			leaflet_vals = [self.leaflet]
+			leaflet_vals = [self.leaflet_to_average]
 
 		# compute mean in selected group for each frame
-		mask = np.isin(leaflets.leaflets, leaflet_vals)
+		mask = np.isin(self.leaflets, leaflet_vals)
 		apl_by_frame = [
 			np.nanmean(apl.areas[mask[:, i], i]) for i in range(apl.areas.shape[1])
 		]
@@ -886,7 +889,7 @@ class LipidPropertyCalculator:
 			)
 
 			if verbose:
-			print('Calculating order parameter for SN2 tail...')
+				print('Calculating order parameter for SN2 tail...')
 
 			scc_sn2.run(
 				step = step,
