@@ -184,18 +184,19 @@ class PropertyAnalyser:
 		"""
 
 		# initiate data with 'Time' column
-		# first, define start end and time step
+		
+		# time step
+		dt = system.trajectory.dt
+
+		# start and end time
 		system.trajectory[0]
 		time1 = system.trajectory.time
-		system.trajectory[1]
-		time2 = system.trajectory.time
 		system.trajectory[-1]
-		time3 = system.trajectory.time
-		time_step = (time2 - time1) * step
+		time2 = system.trajectory.time
 
 		# generate the times
 		trj_dat = {
-			'Time': np.arange(time1, time3 + time_step, time_step)
+			'Time': np.arange(time1, time2 + dt, dt)
 		}
 
 		# return default property names if none supplied
@@ -250,7 +251,7 @@ class PropertyAnalyser:
 		for trj in self.trj:
 
 			if verbose:
-				print(f"Loading and transforming {trj}...")
+				print(f"Loading and transforming '{trj}'...")
 
 			# load trajectory
 			system = mda.Universe(trj) if self.topol is None \
