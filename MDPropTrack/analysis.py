@@ -183,9 +183,19 @@ class PropertyAnalyser:
 		trj_dat - pd.DataFrame with Time and Properties
 		"""
 
-		# data from trajectories 
+		# initiate data with 'Time' column
+		# first, define start end and time step
+		system.trajectory[0]
+		time1 = system.trajectory.time
+		system.trajectory[1]
+		time2 = system.trajectory.time
+		system.trajectory[-1]
+		time3 = system.trajectory.time
+		time_step = (time2 - time1) * step
+
+		# generate the times
 		trj_dat = {
-			'Time': [ts.time for ts in system.trajectory[::step]]
+			'Time': np.arange(time1, time3 + time_step, time_step)
 		}
 
 		# return default property names if none supplied
