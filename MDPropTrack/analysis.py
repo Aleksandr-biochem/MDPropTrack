@@ -206,6 +206,11 @@ class PropertyAnalyser:
 				step=step,
 				verbose=verbose
 			)
+
+			# check shape
+			if len(vals.shape) == 1:
+				vals = vals.reshape((-1, 1))
+
 			trj_dat = np.concatenate((trj_dat, vals), axis=1)
 
 		# return default property names if none supplied
