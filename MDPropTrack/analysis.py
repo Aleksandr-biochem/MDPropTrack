@@ -618,63 +618,148 @@ class LipidPropertyCalculator:
 	key lipid properties from the trajectory
 	"""
 
-	def __init__(self, lipid_sel=None, tail_sel=None, leaflet=0):
+	def __init__(
+			self,
+			lipid_sel=None,
+			tail_sel=None,
+			calculate=['apl', 'thickness', 'order_param'],
+			leaflet_to_average=0
+		):
 		"""
-		Class atributes hold parameters to be used in methods
+		Class attributes hold parameters to be used in methods
 
-		lipid_sel - str, MDAnalysis selection for lipid group for analysis
+		lipid_sel - str, MDAnalysis selection of a lipid group for analysis
 		
 		tail_sel - str, MDAnalysis selection for lipid tails
-		that will be used by CalcOrderParameter
+		that will be used for order parameter calculation
+		
+		calculate - str or list(str), keywords of properties to calculate
+		choices: ['apl', 'thickness', 'order_param'], default all 3
 
-		leaflet - int, leaflets to use for property averaging 
-		Valied for CalcAreaPerLipid
+		leaflet_to_average - int, leaflets to use for area per lipid averaging
 		-1 - lower
 		1  - upper
 		0  - both
 		"""
 		self.lipid_sel = lipid_sel
 		self.tail_sel = tail_sel
-		self.leaflet = leaflet
+		self.calculate = [calculate] if isinstance(calculate, str) \
+						 else calculate
+		self.leaflet_to_average = leaflet_to_average
+		self.leaflets = None
 
-	def CalcAreaPerLipid(self, system, step=1, verbose=False):
+	def _assign_leaflets(self, system, step=1, verbose=False):
 		"""
-		Calculate average area per lipid
+		Run LiPyPhilic leaflet assignment over the trajectory
+		Labels stored in self.leaflets
+		"""
+
+		# binning 
+		n_bins_leaflets  = int(system.dimensions[0] // 10)
+		
+		leaflets = lpp.leaflets.assign_leaflets.AssignLeaflets(
+		  universe = system,
+		  lipid_sel = self.lipid_sel,
+		  n_bins = n_bins_leaflets 
+		)
+
+		if verbose:
+			print('Assigning leaflets...')
+
+		leaflets.run(
+			step = step,
+			verbose = verbose
+		)
+
+		self.leaflets = leaflets
+
+		return self
+
+	def CalcProps(self, system, step=1, verbose=False):
+		"""
+		Calculate averaged properties from list:
+		- area per lipid
+		- bilayer thickness
+		- orientational order parameter of lipid tails
 
 		system - MDAnalysis Universe, trajectory for analysis
 		step - int, step for trajectory analysis
 		verbose - bool, report trajectory analysis progress
 
-		Also requires:
-		self.lipid_sel - atom selection for lipids in the bilayer.
-		Atoms used to identify leaflets.
-		These atoms will also be used to perform the Voronoi tessellation.
-		self.leaflet - leaflet(s) to perform averaging for 
-
 		Returns
-		list(floats)
+		np.array(floats)
 		"""
 
-		# binning 
-		n_bins = int(system.dimensions[0] // 10)
+		props = []
+
+		# Area Per Lipid
+		if 'apl' in self.calculate:
+			props.append(
+				self.CalcAreaPerLipid(
+					system=system,
+					step=step,
+					verbose=verbose
+				)
+			)
+
+		# Bilayer Thickness
+		if 'thickness' in self.calculate:
+			props.append(
+				self.CalcBilayerThickness(
+					system=system,
+					step=step,
+					verbose=verbose
+				)
+			)
+
+		# Order Parameter
+		if 'order_param' in self.calculate:
+			props.append(
+				self.CalcOrderParameter(
+					system=system,
+					step=step,
+					verbose=verbose
+				)
+			)
+
+		return np.vstack(props).T
+
+	def CalcAreaPerLipid(self, system, step=1, verbose=False):
+		"""
+		Calculate average area per lipid over trajectory 
+
+		system - MDAnalysis Universe, trajectory for analysis
+		step - int, step for trajectory analysis
+		verbose - bool, report trajectory analysis progress
 		
-		# assign leaflets
-		leaflets = lpp.leaflets.assign_leaflets.AssignLeaflets(
-		  universe = system,
-		  lipid_sel = self.lipid_sel,
-		  n_bins = n_bins 
-		)
-		leaflets.run(
-			step = step,
-			verbose = verbose
-		)
+		Also requires:
+		self.lipid_sel - atom selection for lipids in the bilayer.
+		These atoms will also be used to perform the Voronoi tessellation
 		
-		# compute apl
+		leaflet_to_average - int, leaflets to use for area per lipid averaging
+		-1 - lower
+		1  - upper
+		0  - both
+
+		Returns
+		np.array(floats)
+		"""
+
+		# check leaflet assignment
+		if self.leaflets is None:
+			self._assign_leaflets(
+				system=system,
+				step=step,
+				verbose=verbose
+			)
+
+		# configure apl calculation
 		apl = lpp.analysis.area_per_lipid.AreaPerLipid(
 			universe = system,
 			lipid_sel = self.lipid_sel,
-			leaflets = leaflets.leaflets
+			leaflets = self.leaflets
 		)
+
 		apl.run(
 			step = step,
 			verbose = verbose
@@ -696,7 +781,7 @@ class LipidPropertyCalculator:
 	
 	def CalcBilayerThickness(self, system, step=1, verbose=False):
 		"""
-		Calculate average bilayer thickness over trajectory 
+		Calculate bilayer_thickness over trajectory 
 
 		system - MDAnalysis Universe, trajectory for analysis
 		step - int, step for trajectory analysis
@@ -708,32 +793,30 @@ class LipidPropertyCalculator:
 		These atoms will also be used to define thickness.
 
 		Returns
-		list(floats)
+		np.array(floats)
 		"""
 
+		# check leaflet assignment
+		if self.leaflets is None:
+			self._assign_leaflets(
+				system=system,
+				step=step,
+				verbose=verbose
+			)
+
 		# binning 
-		n_bins_leaflets  = int(system.dimensions[0] // 10)
 		n_bins_thickness = int(system.dimensions[0] // 20)
 		
-		# assign leaflets
-		leaflets = lpp.leaflets.assign_leaflets.AssignLeaflets(
-		  universe = system,
-		  lipid_sel = self.lipid_sel,
-		  n_bins = n_bins_leaflets 
-		)
-		
-		leaflets.run(
-			step = step,
-			verbose = verbose
-		)
-
 		# compute thickness
 		memb_thickness = lpp.analysis.MembThickness(
 			universe = system,
-		 	leaflets = leaflets.leaflets,
+		 	leaflets = self.leaflets,
 			lipid_sel = self.lipid_sel,
 			n_bins = n_bins_thickness
 		)
+
+		if verbose:
+			print('Calculating membrane thickness...')
 
 		memb_thickness.run(
 			step = step,
@@ -759,7 +842,15 @@ class LipidPropertyCalculator:
 		list(floats)
 		"""
 
-		# number of selections to work with?
+		# check leaflet assignment
+		if self.leaflets is None:
+			self._assign_leaflets(
+				system=system,
+				step=step,
+				verbose=verbose
+			)
+
+		# check number of selections to work with
 		if isinstance(self.tail_sel, list):
 			sn1_sel, sn2_sel = self.tail_sel
 		else:
@@ -771,6 +862,9 @@ class LipidPropertyCalculator:
 			universe = system,
 			tail_sel = sn1_sel
 		)
+
+		if verbose:
+			print('Calculating order parameter for SN1 tail...')
 
 		scc_sn1.run(
 			step = step,
@@ -785,6 +879,9 @@ class LipidPropertyCalculator:
 				universe = system,
 				tail_sel = sn2_sel
 			)
+
+			if verbose:
+			print('Calculating order parameter for SN2 tail...')
 
 			scc_sn2.run(
 				step = step,
