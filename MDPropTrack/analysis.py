@@ -195,28 +195,30 @@ class PropertyAnalyser:
 		time2 = system.trajectory.time
 
 		# generate the times
-		trj_dat = {
-			'Time': np.arange(time1, time2 + dt, dt)
-		}
-
-		# return default property names if none supplied
-		if self.func_names is None:
-			self.func_names = [
-				f"Prop{i}" for i in range(1, len(self.funcs) + 1)
-			]
+		trj_dat = np.arange(time1, time2 + dt, dt).reshape((-1, 1))
 
 		# apply each function to the trajectory
-		for n, func in enumerate(self.funcs):
+		for func in self.funcs:
 
 			# save property values
-			trj_dat[self.func_names[n]] = func(
+			vals = func(
 				system=system,
 				step=step,
 				verbose=verbose
 			)
+			trj_dat = np.concatenate((trj_dat, vals), axis=1)
+
+		# return default property names if none supplied
+		if self.func_names is None:
+			self.func_names = [
+				f"Prop{i}" for i in range(1, trj_dat.shape[1])
+			]
 
 		# conver to pd.DataFrame
-		trj_dat = pd.DataFrame.from_dict(trj_dat)
+		trj_dat = pd.DataFrame(
+			data = trj_dat,
+			columns = ['Time'] + self.func_names
+		)
 		
 		return trj_dat
 		
