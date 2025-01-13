@@ -946,6 +946,8 @@ class ProteinPropertyCalculator:
 		# iterate over trj and calculate R
 		Rg_by_frame = []
 		iterator = system.trajectory[::step]	
+		if verbose:
+			print('Calculating gyration radius...')
 		for ts in (tqdm(iterator) if verbose else iterator):
 			Rg_by_frame.append(
 				[sel.radius_of_gyration() for sel in selections]
@@ -979,6 +981,9 @@ class ProteinPropertyCalculator:
 			groupselections = self.protein_sel
 		) 
 
+		if verbose:
+			print('Calculating RMSD...')
+		
 		rms.run(
 			step = step,
 			verbose = True
