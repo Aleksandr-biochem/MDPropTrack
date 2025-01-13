@@ -157,25 +157,23 @@ def DefineFuncs(args):
 
 	funcs, func_names = [], []
 
-	if args.apl is not None:
-		funcs.append(
-			LipidPropertyCalculator(lipid_sel=args.apl).CalcAreaPerLipid
-		)
-		func_names.append('APL')
-
-	if args.thickness is not None:
-		funcs.append(
-			LipidPropertyCalculator(lipid_sel=args.thickness).CalcBilayerThickness
-		)
-		func_names.append('Bilayer Thickness')
-
-	if args.scc is not None:
+	mask = [kwarg is not None for kwarg in [args.apl, args.thickness, args.scc]]
+	if any(mask):
+		
 		tail_sel = args.scc.split(',') if ',' in args.scc \
 				   else args.scc
+
 		funcs.append(
-			LipidPropertyCalculator(tail_sel=tail_sel).CalcOrderParameter
+			LipidPropertyCalculator(
+					lipid_sel = args.apl,
+					tail_sel = tail_sel,
+					calculate = list(np.array([['apl', 'thickness', 'order_param']])[mask])
+				).CalcProps
 		)
-		func_names.append('Lipid tail order parameter')
+
+		func_names.extend(['APL', 'Bilayer Thickness', 'Lipid tail order parameter'])
+
+		# There should be a check that args.apl and args.thickness do match
 
 	if args.rg is not None:
 		funcs.append(
