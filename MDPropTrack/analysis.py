@@ -214,7 +214,9 @@ class PropertyAnalyser:
 			trj_dat = np.concatenate((trj_dat, vals), axis=1)
 
 		# return default property names if none supplied
-		if self.func_names is None:
+		# or if the number of names is incorrect
+		if (self.func_names is None) or \
+		   (len(self.func_names) != (trj_dat.shape[1] - 1)):
 			self.func_names = [
 				f"Prop{i}" for i in range(1, trj_dat.shape[1])
 			]
