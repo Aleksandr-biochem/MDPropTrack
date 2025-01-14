@@ -765,7 +765,7 @@ class LipidPropertyCalculator:
 				)
 			)
 
-		return np.vstack(props).T
+		return np.hstack(props)
 
 	def CalcAreaPerLipid(self, system, step=1, verbose=False):
 		"""
@@ -881,7 +881,7 @@ class LipidPropertyCalculator:
 			verbose = verbose
 		)
 
-		return memb_thickness.memb_thickness
+		return memb_thickness.memb_thickness.reshape((-1, 1))
 
 	def CalcOrderParameter(self, system, step=1, verbose=False):
 		"""
