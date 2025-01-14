@@ -628,7 +628,9 @@ class LipidPropertyCalculator:
 			lipid_sel=None,
 			tail_sel=None,
 			calculate=['apl', 'thickness', 'order_param'],
-			leaflet_to_average=0
+			leaflet_to_average=0,
+			bin_len_leaflets=10,
+			bin_len_thickness=20
 		):
 		"""
 		Class attributes hold parameters to be used in methods
@@ -645,12 +647,17 @@ class LipidPropertyCalculator:
 		-1 - lower
 		1  - upper
 		0  - both
+
+		bin_len_leaflets - float, bin width for leaflet identification, default 10
+		bin_len_thickness - float, bin width for membrane thickness calculation, default 20
 		"""
 		self.lipid_sel = lipid_sel
 		self.tail_sel = tail_sel
 		self.calculate = [calculate] if isinstance(calculate, str) \
 						 else calculate
 		self.leaflet_to_average = leaflet_to_average
+		self.bin_len_leaflets = bin_len_leaflets
+		self.bin_len_thickness = bin_len_thickness
 		self.leaflets = None
 
 	def _assign_leaflets(self, system, step=1, verbose=False):
@@ -660,7 +667,7 @@ class LipidPropertyCalculator:
 		"""
 
 		# binning 
-		n_bins_leaflets  = int(system.dimensions[0] // 10)
+		n_bins_leaflets  = int(system.dimensions[0] // self.bin_len_leaflets)
 		
 		leaflets = lpp.leaflets.assign_leaflets.AssignLeaflets(
 		  universe = system,
@@ -813,7 +820,7 @@ class LipidPropertyCalculator:
 			)
 
 		# binning 
-		n_bins_thickness = int(system.dimensions[0] // 20)
+		n_bins_thickness = int(system.dimensions[0] // self.bin_len_thickness)
 		
 		# compute thickness
 		memb_thickness = lpp.analysis.MembThickness(
