@@ -628,6 +628,7 @@ class LipidPropertyCalculator:
 			lipid_sel=None,
 			tail_sel=None,
 			calculate=['apl', 'thickness', 'order_param'],
+			filter_lipid=['all'],
 			leaflet_to_average=0,
 			bin_len_leaflets=10,
 			bin_len_thickness=20
@@ -643,6 +644,9 @@ class LipidPropertyCalculator:
 		calculate - str or list(str), keywords of properties to calculate
 		choices: ['apl', 'thickness', 'order_param'], default all 3
 
+		filter_lipid - str or list(str), one or multiple atom selections
+		to filter lipids in APL and order parameter calculation
+
 		leaflet_to_average - int, leaflets to use for area per lipid averaging
 		-1 - lower
 		1  - upper
@@ -655,6 +659,8 @@ class LipidPropertyCalculator:
 		self.tail_sel = tail_sel
 		self.calculate = [calculate] if isinstance(calculate, str) \
 						 else calculate
+		self.filter_lipid = [filter_lipid] if isinstance(filter_lipid, str) \
+						 	else filter_lipid
 		self.leaflet_to_average = leaflet_to_average
 		self.bin_len_leaflets = bin_len_leaflets
 		self.bin_len_thickness = bin_len_thickness
@@ -686,6 +692,29 @@ class LipidPropertyCalculator:
 		self.leaflets = leaflets.leaflets
 
 		return self
+
+	def _filter_lipids(self, system, main_sel, filter_sel='all'):
+		"""
+		Generate a mask to filter lipid species from bilayer
+		
+		system - MDAnalysis Universe, trajectory for analysis
+		main_sel - str, main atom selection for filtering
+		filter_sel - str, atom selection to combine with main selection
+
+		returns
+		np.array(bool)
+		"""
+
+		# get ids of all lipid particles from the main selection
+		lipid_ids = system.select_atoms(main_sel).residues.resids
+
+		# modify selection with additional filter
+		filtered_ids = system.select_atoms(
+			main_sel + ' and ' + filter_sel
+		).residues.resids
+		
+		# return bool mask
+		return np.isin(lipid_ids, filtered_ids)
 
 	def CalcProps(self, system, step=1, verbose=False):
 		"""
@@ -785,14 +814,26 @@ class LipidPropertyCalculator:
 			leaflet_vals = [-1, 1]
 		else:
 			leaflet_vals = [self.leaflet_to_average]
+		mask_leaflet = np.isin(self.leaflets, leaflet_vals)
 
-		# compute mean in selected group for each frame
-		mask = np.isin(self.leaflets, leaflet_vals)
-		apl_by_frame = [
-			np.nanmean(apl.areas[mask[:, i], i]) for i in range(apl.areas.shape[1])
-		]
+		# compute mean by frame in lipid groups
+		apl_by_frame = []
+		for filter_sel in self.filter_lipid:
+			
+			# define lipid mask
+			mask_lipid = self._filter_lipids(
+				system=system,
+				main_sel=self.lipid_sel,
+				filter_sel=filter_sel
+			)
+
+			# average apl in lipid group
+			apl_by_frame.append(
+				[np.nanmean(apl.areas[mask_leaflet[:, i] * mask_lipid, i]) \
+				 for i in range(apl.areas.shape[1])]
+			)
 		
-		return apl_by_frame
+		return np.array(apl_by_frame).T
 	
 	def CalcBilayerThickness(self, system, step=1, verbose=False):
 		"""
@@ -854,7 +895,7 @@ class LipidPropertyCalculator:
 		order parameter calculation
 
 		Returns
-		list(floats)
+		np.array(floats)
 		"""
 
 		# check leaflet assignment
@@ -904,12 +945,28 @@ class LipidPropertyCalculator:
 			)
 
 			scc_av = lpp.analysis.order_parameter.SCC.weighted_average(scc_sn1, scc_sn2)
-			mean_order_parameters = np.nanmean(scc_av.SCC, axis=0)
-		
-		else:
-			mean_order_parameters = np.nanmean(scc_sn1.SCC, axis=0)
 
-		return mean_order_parameters
+		# just one tail
+		else:
+			scc_av = scc_sn1
+
+		# compute mean by frame for lipid groups
+		scc_by_frame = []
+		for filter_sel in self.filter_lipid:
+			
+			# define lipid mask
+			mask_lipid = self._filter_lipids(
+				system=system,
+				main_sel=sn1_sel,
+				filter_sel=filter_sel
+			)
+
+			# mask and average by frame
+			scc_by_frame.append(
+				np.nanmean(scc_av.SCC[mask_lipid, :], axis=0)
+			)
+
+		return np.array(scc_by_frame).T
 
 class ProteinPropertyCalculator:
 	"""
