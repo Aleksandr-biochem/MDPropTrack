@@ -628,6 +628,7 @@ class LipidPropertyCalculator:
 	def __init__(
 			self,
 			lipid_sel=None,
+			apl_sel=None,
 			tail_sel=None,
 			calculate=['apl', 'thickness', 'order_param'],
 			filter_lipid=['all'],
@@ -638,8 +639,11 @@ class LipidPropertyCalculator:
 		"""
 		Class attributes hold parameters to be used in methods
 
-		lipid_sel - str, MDAnalysis selection of a lipid group for analysis
+		lipid_sel - str, MDAnalysis selection of a lipid group for leaflet identification
+		and membrane thickness calculation (usually phosphate)
 		
+		apl_sel - atr, atom selection for the group to perform Voronoi Tesselation on
+
 		tail_sel - str, MDAnalysis selection for lipid tails
 		that will be used for order parameter calculation
 		
@@ -658,6 +662,7 @@ class LipidPropertyCalculator:
 		bin_len_thickness - float, bin width for membrane thickness calculation, default 20
 		"""
 		self.lipid_sel = lipid_sel
+		self.apl_sel=apl_sel
 		self.tail_sel = tail_sel
 		self.calculate = [calculate] if isinstance(calculate, str) \
 						 else calculate
@@ -799,7 +804,7 @@ class LipidPropertyCalculator:
 		# configure apl calculation
 		apl = lpp.analysis.area_per_lipid.AreaPerLipid(
 			universe = system,
-			lipid_sel = self.lipid_sel,
+			lipid_sel = self.apl_sel,
 			leaflets = self.leaflets
 		)
 
