@@ -108,23 +108,27 @@ class PropertyAnalyser:
 
 		# check additional transformation groups
 		if self.center_group is not None:
+			
 			center_group = system.select_atoms(self.center_group)
 
-		if self.rot_trans_group is not None:
-			fit_group = system.select_atoms(self.rot_trans_group)
-		
-		# add centering
-		if len(center_group.atoms) > 0:
-			workflow.extend([
-				transformations.center_in_box(center_group),
-				transformations.wrap(ag, compound='residues')
-			])	
+			# add centering
+			if len(center_group.atoms) > 0:
+				workflow.extend([
+					transformations.center_in_box(center_group),
+					transformations.wrap(ag, compound='residues')
+				])	
 
-		# add rotation and translation
-		if len(fit_group.atoms) > 0:
-			workflow.extend([
-				transformations.fit_rot_trans(fit_group, fit_group)
-			])
+		if self.rot_trans_group is not None:
+			
+			fit_group = system.select_atoms(self.rot_trans_group)
+			system_ref = system.copy()
+			fit_group_ref = system_ref.select_atoms(self.rot_trans_group)
+
+			# add rotation and translation
+			if len(fit_group.atoms) > 0:
+				workflow.extend([
+					transformations.fit_rot_trans(fit_group, fit_group_ref)
+				])
 
 		return workflow
 
