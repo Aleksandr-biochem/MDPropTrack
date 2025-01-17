@@ -1064,4 +1064,4 @@ class ProteinPropertyCalculator:
 			verbose = True
 		)
 
-		return rms.rmsd[:, -len(self.protein_sel)]
+		return rms.results.rmsd[:, -len(self.protein_sel):]
