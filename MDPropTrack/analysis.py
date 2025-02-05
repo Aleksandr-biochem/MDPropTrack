@@ -10,9 +10,34 @@ from MDAnalysis import transformations
 
 class PropertyAnalyser:
 	"""
-	Extract properties of a simulation system
+	Class formalising extraction and analysis of properties of a simulation system
 	from edr files and/or trajectories
-	and analyse convergence
+	
+	Attributes
+	----------
+
+	edr: str or list(str)
+		path or list of paths to edr files in a sequential order
+
+	trj: str or list(str)
+		path or list of paths to trajectory files in a sequential order
+
+	topol: str
+		path to a topology file to facilitate MDAnalysis Universe loading
+		usually required for trajectory processing
+
+	funcs: list(functions)
+		list of functions to apply along the trajectory
+		Functions are expected to adhere to a specific input-output structure
+		
+	func_names: list(str)
+		names for the properties computed by funcs
+
+	transformation arguments:
+		center_group: str
+			atom selection to center in the box
+		rot_trans_group: str
+			atom selection to fit alonmg the trj
 	"""
 
 	def __init__(
@@ -25,28 +50,6 @@ class PropertyAnalyser:
 		center_group='protein',
 		rot_trans_group='protein'
 	):
-		"""
-		edr - str or list(str), path or list of paths
-		to edr files in a sequential order
-	
-		trj - str or list(str), path or list of paths
-		to trajectory files in a sequential order
-
-		topol - str, path to a topology file 
-		to facilitate MDAnalysis Universe loading
-		usually required for your custom functions
-
-		funcs - list(functions),
-		list of functions to apply along the trajectory
-		Functions are expected to adhere to a specific input-output structure
-		
-		func_names - list(str), names for the properties
-		computed by funcs
-
-		transformation arguments:
-		center_group - str, atom selection to center in the box
-		rot_trans_group - str, atom selection to fit alonmg the trj
-		"""
 
 		# energy and trajectory files for analysis
 		self.edr = self._check_type(edr)
@@ -63,14 +66,14 @@ class PropertyAnalyser:
 		
 		# pandas DataFrame with extracted data
 		self.data = None
-		
+	
+	@classmethod
 	def _check_type(self, var):
 		"""
 		Check that var is None, str or list(str)
 		If str, convert to list(str)
 	
-		Returns
-		list(srt)
+		Returns list(srt)
 		"""
 	
 		# is None
@@ -81,7 +84,7 @@ class PropertyAnalyser:
 		elif isinstance(var, str):
 			checked_var = [var]
 	
-		# if it's list are all elements str 
+		# if it's a list, are all elements str?
 		elif isinstance(var, list):
 			check_list = [isinstance(v, str) for v in var]
 			if False not in check_list:
@@ -318,6 +321,9 @@ class PropertyAnalyser:
 	def extract_properties(self, tu='ns', step=1, sequential=True, verbose=False):
 		"""
 		Extract data from edr and/or trj files
+
+		Parameters
+        ----------
 		
 		tu - str, time units option, ns or ps
 		default ns
