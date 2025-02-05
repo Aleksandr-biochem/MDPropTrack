@@ -42,28 +42,22 @@ class PropertyAnalyser:
 
 	def __init__(
 		self,
-		edr=None,
-		trj=None,
-		topol=None,
+		simulations=None,
+		tags=None,
 		funcs=None,
-		func_names=None,
-		center_group='protein',
-		rot_trans_group='protein'
+		func_names=None
 	):
 
-		# energy and trajectory files for analysis
-		self.edr = self._check_type(edr)
-		self.trj = self._check_type(trj)
-		self.topol = self._check_type(topol)
+		# energy, trajectory files and Unioverse instances for analysis
+		self.simulations = self._check_type(simulations)
+		
+		# autofill tags if none?
+		self.tags = self._check_type(tags)
 
-		# functions to be applied along the trajectory
+		# functions to be applied along the trajectory/Universe
 		self.funcs = funcs
 		self.func_names = self._check_type(func_names)
 
-		# transformation arguments
-		self.center_group = center_group
-		self.rot_trans_group = rot_trans_group
-		
 		# pandas DataFrame with extracted data
 		self.data = None
 	
@@ -317,60 +311,73 @@ class PropertyAnalyser:
 			self.data = trj_dat_combined
 		
 		return self
-	
-	def extract_properties(self, tu='ns', step=1, sequential=True, verbose=False):
+
+	def extract_properties(self, tu='ns', step=1, sequential=False, verbose=False):
 		"""
-		Extract data from edr and/or trj files
+		Extract data from edr files and trajectories
 
 		Parameters
-        ----------
+		----------
 		
-		tu - str, time units option, ns or ps
-		default ns
+		tu - str
+			convert to these time units, ns or ps, default ns
 
 		For trajectory analysis only:
 
-		step - int, step for trajectory analysis
-		default 1
+		step: int
+			step for trajectory analysis, default 1
 		
-		sequential - bool, if True then supplied files
-		are considered sequential step and the Time 
-		is adjusted accordingly
-		deffault, True
+		sequential: bool
+			if True then supplied `simulations` are considered sequential steps
+			and `Time` column in .data is adjusted accordingly
+			deffault, False
 
-		verbose - bool, show traj analysis progress
-		default False
+		verbose: bool
+			verbose traj analysis progress, default False
 		
-		Returns self
+		Returns
+		----------
+		self
 		"""
 
 		# check time units
 		if tu not in ['ns', 'ps']:
-			raise Exception("Unrecognised tu input")
+			raise Exception("Unrecognised tu option")
 		
 		# check that one of the inputs is there
-		if (self.edr is None) and (self.trj is None):
-			raise Exception("Neither edr or trj file were supplied")
+		if self.simulations is None:
+			raise Exception("No simulation data provided")
 		
-		# extract properties from edr
-		if self.edr is not None:
-			self._read_edrs(
-				tu = tu,
-				sequential = sequential
-			)
+		# analyse each simulation input
+		for sim in self.simulations:
 
-		# extract properties from trajectories
-		if self.trj is not None:
+			# classify simulation input
+			input_type = self._get_input_type(sim)
 
-			if self.funcs is None:
-				raise Exception("`func` argument is required for trajectory analysis")
+			# analyse energy file
+			if input_type == 'edr':
 
-			self._analyse_trjs(
-				tu = tu,
-				step = step,
-				sequential = sequential, 
-				verbose = verbose
-			)
+				self._read_edrs(
+					sim
+					tu = tu,
+					sequential = sequential
+				)
+
+			# analyse trajectory
+			else:
+
+				# transform trj file into MDAnalysis Universe
+				if input_type == 'trj':
+
+					sim = # load universe
+
+				self._analyse_trjs(
+					sim
+					tu = tu,
+					step = step,
+					sequential = sequential, 
+					verbose = verbose
+				)
 		
 		return self
 
