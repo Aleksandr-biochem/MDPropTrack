@@ -7,6 +7,7 @@ import MDAnalysis as mda
 import lipyphilic as lpp
 import matplotlib.pyplot as plt
 from MDAnalysis import transformations
+from matplotlib.colors import LinearSegmentedColormap, to_rgba_array
 
 class PropertyAnalyser:
 	"""
@@ -33,11 +34,21 @@ class PropertyAnalyser:
 	func_names: list(str)
 		names for the properties computed by funcs
 
-	transformation arguments:
-		center_group: str
-			atom selection to center in the box
-		rot_trans_group: str
-			atom selection to fit alonmg the trj
+	data: pd.DataFRame
+		data extracted from simulations
+	
+	tag_names: list(str)
+		list of tags in self.data
+
+	_tag_combinations: list(list(str))
+		list of tag value combinations in self.data
+
+	properties: list(str)
+		list of properties in self.data
+
+	tau_data: pd.DataFrame
+		autocorrelation time (tau) vs simulation length for each property
+
 	"""
 
 	def __init__(
@@ -59,6 +70,7 @@ class PropertyAnalyser:
 		# tags from input
 		else:
 			self.tags = self._transform_tags(tags)
+		self.tag_names  = list(self.tags[0].keys())
 
 		# functions to be applied along the trajectory/Universe
 		self.funcs = funcs
@@ -66,6 +78,20 @@ class PropertyAnalyser:
 
 		# pandas DataFrame with extracted data
 		self.data = None
+		self.properties = None
+		self._tag_combinations = []
+
+		# pandas dataframe with convergence data
+		self.tau_data = None
+
+		# internal colour-blind friendly cmap
+		self._custom_cmap = self.hex_to_cmap(
+			hex_colours = [
+			 '#648fff', '#dc267f', 
+			 '#785ef0', '#fe6100',
+			 '#ffb000', '#000000'
+			]
+		)
 	
 	@classmethod
 	def _check_var_type(self, var):
@@ -160,6 +186,52 @@ class PropertyAnalyser:
 
 		return tags
 
+	def _append_data(self, df):
+		"""
+		Append DataFrame to self.data with proper tag merger
+		
+		Parameters
+		----------
+		
+		trj: pd.DataFrame
+			dta to append
+
+		Returns
+		----------
+		self
+		"""
+
+		# tag combination in this df
+		tag_combination = np.unique(
+			df[self.tag_names].values.astype(str),
+			axis=0
+		)[0]
+
+		# if self.data is empty
+		if self.data is None:
+			self.data = df
+
+		else:
+			
+			# merge if there is a tag match
+			if tag_combination in self._tag_combinations:
+				self.data = pd.merge(
+					self.data,
+					df,
+					on = ['Time'] + self.tag_names,
+					how = 'outer'
+				)
+
+			# concat if there is no tag match
+			else:
+				self.data = pd.concat([self.data, df]) \
+							.reset_index(drop=True)
+
+		# add tag combination of the new DataFrame piece
+		self._tag_combinations.append(tag_combination)
+
+		return self
+
 	def _read_edr(self, edr, tags, tu, sequential):
 		"""
 		Read data from edr file and append it to self.data
@@ -200,18 +272,8 @@ class PropertyAnalyser:
 		for tag in tags:
 			df[tag] = tags[tag]
 		
-		# add df do self.data on time and tag columns
-		if self.data is not None:
-			self.data = pd.merge(
-				self.data,
-				trj_dat,
-				on = ['Time'] + list(tags.keys()),
-				how = 'outer'
-			)
-
-		# or just save df as self.data
-		else:
-			self.data = df
+		# append to self.data
+		self._append_data(df)
 			
 		return self
 
@@ -340,18 +402,8 @@ class PropertyAnalyser:
 		for tag in tags:
 			trj_dat[tag] = tags[tag]
 		
-		# add trj_data do self.data on time and tag columns
-		if self.data is not None:
-			self.data = pd.merge(
-				self.data,
-				trj_dat,
-				on = ['Time'] + list(tags.keys()),
-				how = 'outer'
-			)
-
-		# or just save trj data as self.data
-		else:
-			self.data = trj_dat
+		# append to self.data
+		self._append_data(trj_dat)
 
 		return self
 
@@ -391,6 +443,9 @@ class PropertyAnalyser:
 		if self.simulations is None:
 			raise Exception("No simulation data provided")
 		
+		# reset self.data
+		self.data = None
+
 		# analyse each simulation input
 		for sim, tags in zip(self.simulations, self.tags):
 
@@ -423,6 +478,12 @@ class PropertyAnalyser:
 					verbose = verbose
 				)
 		
+		# collect property names 
+		self.properties = []
+		for col in self.data.columns:
+			if (col != 'Time') and (col not in self.tag_names):
+				self.properties.append(col)
+
 		return self
 
 	################################
@@ -431,26 +492,44 @@ class PropertyAnalyser:
 	# https://emcee.readthedocs.io/en/stable/tutorials/autocorr/
 	# Copyright 2012-2021, Dan Foreman-Mackey & contributors
 
+	@classmethod
 	def _get_next_pow_two(self, n):
 		"""
 		Return right nearest 
 		int that is power of 2
+
+		Parameters
+		----------
+		
+		n: float
+			number to find nearest power of 2 int for
+
+		Returns
+		----------
+		int - nearest int that is power of 2
 		"""
 		i = 1
 		while i < n:
 			i = i << 1
 		return i
 
+	@classmethod
 	def _get_autocorr_func_1d(self, y, norm=True):
 		"""
 		Estimate autocorrelation function from
 		time series data using one-dimensional
 		discrete Fourier Transform
+
+		Parameters
+		----------
 		
-		y - np.array(floats), time series data
-		norm - bool, normalise acf, default True
+		y: np.array(floats)
+			time series data
+		norm: bool
+			normalise acf, default True
 
 		Returns
+		----------
 		np.array(floats) empirical acf values
 		""" 
 
@@ -468,33 +547,50 @@ class PropertyAnalyser:
 
 		return acf
 	
+	@classmethod
 	def _auto_window(self, taus, c):
 		"""
 		Automated windowing procedure following Sokal (1989)
 		
-		taus - np.array of tau estimates
-		c - float, coefficient in tau estimation
+		Parameters
+		----------
+		taus: np.array(float)
+			tau estimates
+
+		c: float
+			coefficient in tau estimation
 
 		Return
 		int, window number
 		"""
+
 		m = np.arange(len(taus)) < c * taus
+		
 		if np.any(m):
 			window = np.argmin(m)
 		else:
 			window = len(taus) - 1
+		
 		return window
 
+	@classmethod
 	def _estimate_autocorr_tau(self, y, c=5.0):
 		"""
 		Estimate autocorrelation time tau
 		from time-series
+
+		Parameters
+		----------
 		
-		y - np.array(floats), time series data
-		c - float, coefficient in tau estimation
-		default 0.5
+		y: np.array(floats)
+			time series data
+
+		c: float
+			coefficient in tau estimation, default 0.5
 
 		Returns
+		----------
+		tau - float
 		"""
 
 		# get acf estimate
@@ -506,45 +602,116 @@ class PropertyAnalyser:
 		
 		return taus[window]
 
-	def _estimate_convergence(self, prop):
+	def estimate_convergence(self):
 		"""
 		Estimate autocorrelation time (tau) vs simulation length
 		to assess convergence
 
-		prop - str, property name from self.data 
+		Assigns self.tau_data based on self.data
 
-		Returns 
-		two np.array(float)
-		array of time points and taus 
+		Returns
+		----------
+		self 
 		"""
 
-		# get the time-series values
-		dat = self.data[prop].values
-
-		# generate step points and
-		# time points for tau estimates
-		N = np.exp(
-			np.linspace(np.log(100), np.log(dat.shape[0]), 10)
-		).astype(int)
-		ts = self.data['Time'].values[N - 1]
-
-		# estimate tau from trj slices
-		tau_data = np.array([
-			self._estimate_autocorr_tau(dat[:n]) for n in N
-		])
+		if self.data is None:
+			raise Exception('.data is empty')
 		
-		return ts, tau_data
+		# reset self.tau_data
+		self.tau_data = []
+
+		# analyse convergence for every property
+		for prop in self.properties:
+			
+			# and for for every tag combination 
+			for tag_comb in self._tag_combinations:
+
+				# subset data
+				tag_filter = ' & '.join(
+					[
+						f"{tag} == '{tag_val}'" for tag, tag_val \
+						in zip(self.tag_names, tag_comb)
+					]
+				)
+				dat = self.data.query(tag_filter)[['Time', prop]].values
+
+				# generate step points and
+				# time points for tau estimates
+				N = np.exp(
+					np.linspace(np.log(100), np.log(dat.shape[0]), 10)
+				).astype(int)
+				ts = dat[N - 1, 0]
+
+				# estimate tau from trj slices
+				tau_data = np.array([
+					self._estimate_autocorr_tau(dat[:n, 1]) for n in N
+				])
+
+				# generate DataFrame
+				tau_data = pd.DataFrame.from_dict(
+					data = {
+						'Time': ts,
+						'tau': tau_data
+					}
+				)
+				tau_data['Property'] = prop
+				for tag, tag_val in zip(self.tag_names, tag_comb):
+					tau_data[tag] = tag_val
+
+				# add to self.tau_data
+				self.tau_data.append(tau_data)
+
+		# merge all dataframes in self.tau_data
+		self.tau_data = pd.concat(self.tau_data) \
+						.reset_index(drop=True)
+
+		return self
 
 	##################################
 	
+	@staticmethod
+	def hex_to_cmap(self, hex_colours):
+		"""
+		Produce a colormap from a list of discrete colors without interpolation
+		
+		Parameters
+		----------
+
+		hex_colours: list(str)
+			list of hex colour codes
+
+		Returns
+		----------
+		colourmap
+		"""
+
+		# covert to rgb and reshape
+		clrs = to_rgba_array(hex_colours)
+		clrs = np.vstack([clrs[0], clrs, clrs[-1]])
+
+		colour_dict = {
+			prime_color : [
+				(i / (len(clrs) - 2.), clrs[i, j], clrs[i + 1, j]) for i in range(len(clrs) - 1)
+			] for j, prime_color in enumerate(['red','green','blue'])
+		}
+		
+		return LinearSegmentedColormap('Custom_cmap', colour_dict)
+
 	def _construct_multiplot(self, n_prop, figure_kwargs):
 		"""
 		Construct subplot grid
 
-		n_prop - int, number of properties to plot
-		figure_kwargs - dict, matplotlib figure kwargs
+		Parameters
+		----------
+
+		n_prop: int
+			number of properties to plot
+		
+		figure_kwargs: dict
+			matplotlib figure kwargs
 
 		Return
+		----------
 		fig, axs - mplt Figure and list(Axes)
 		"""
 
@@ -575,15 +742,15 @@ class PropertyAnalyser:
 			axs = np.array([axs])
 					
 		return fig, axs
-		
+	
 	def plot(
 			self,
 			properties_to_plot=['Potential', 'Temperature', 'Pressure', 'Volume'],
 			plot_convergence=False,
 			hue='name',
-			labels=None,
 			x_lab='Time, ns',
-			cmap='Set1',
+
+			cmap=None,
 
 			figure_kwargs=None, 
 
@@ -607,20 +774,24 @@ class PropertyAnalyser:
 		plot_convergence: bool
 			Plot convergence instread of time series; default False
 		
-		labels: list(str)
-			list of custom names for plotted steps
+		hue: str,
+			self.data column to use for hue, default 'name'
 
-		x_lab - str, x axis label, defalut 'Time, ns'
+		x_lab: str,
+			x axis label, defalut 'Time, ns'
 		
-		figure_kwargs - dict, matplotlib figure kwargs
-		These can be used to adjust output subplot
+		figure_kwargs: dict
+			matplotlib figure kwargs
 		
-		style_kwargs - dict, seaborn style kwargs
+		style_kwargs: dict
+			seaborn style kwargs
 
-		sns_kwargs - dict, seaborn lineplot kwargs
+		sns_kwargs: dict
+			seaborn lineplot kwargs
 		
 		Returns:
-		matplotlib figure object
+		----------
+		fig, axs - mplt Figure and list(Axes)
 		"""
 		
 		# do we have data to plot
@@ -643,17 +814,28 @@ class PropertyAnalyser:
 				n_prop = len(prop_list),
 				figure_kwargs = figure_kwargs
 			)
+
+			# define custom cmap
+			if cmap is None:
+				cmap = self._custom_cmap
+			elif isinstance(cmap, list):
+				cmap = self.hex_to_cmap(cmap)
 				
 			# plot each property on a different subplot
 			for i, prop in enumerate(prop_list):
 				
 				# for convergence
 				if plot_convergence:
-					ts, tau_data = self._estimate_convergence(prop)
+					
+					if self.tau_data is None:
+						self.estimate_convergence()
 
 					sns.lineplot(
-						x = ts,
-						y = tau_data,
+						data=self.tau_data.query(f"Property == '{prop}'"),
+						x = 'Time',
+						y = 'tau',
+						hue = hue,
+						cmap = cmap,
 						ax = axs[i],
 						marker='o',
 						**sns_kwargs
@@ -671,23 +853,19 @@ class PropertyAnalyser:
 						data = self.data,
 						x = 'Time',
 						y = prop,
-						hue = 'Step_name',
+						hue = hue,
 						palette = cmap,
 						ax = axs[i],
 						**sns_kwargs
 					)
 					
-					# change labels if requested
-					if labels is not None:
-						handles, previous_labels = axs[i].get_legend_handles_labels()
-						axs[i].legend(
-							handles = handles,
-							labels = labels
-						)
+					axs[i].set_ylabel(
+						prop,
+						fontsize=15,
+						labelpad=10
+					)
 
-					axs[i].set_ylabel(prop,  fontsize=15, labelpad=10)
-
-				# set title and axes labels 
+				# set title and x-axis label 
 				axs[i].set_title(prop, fontweight='bold', fontsize=18, pad=10)
 				axs[i].set_xlabel(x_lab, fontsize=15, labelpad=10)
 	
