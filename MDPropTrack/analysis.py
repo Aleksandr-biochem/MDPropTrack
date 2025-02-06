@@ -11,20 +11,19 @@ from MDAnalysis import transformations
 class PropertyAnalyser:
 	"""
 	Class formalising extraction and analysis of properties of a simulation system
-	from edr files and/or trajectories
+	using edr files and/or trajectories as inputs
 	
 	Attributes
 	----------
 
-	edr: str or list(str)
-		path or list of paths to edr files in a sequential order
+	simulations: str - path to .edr file
+				 tuple(str, str) - paths to topology and trajectory files
+				 mda.Universe - loaded and transformed Universe
+				 list(str, tuple(str, str), mda.Universe)
+		simulation data for analysis
 
-	trj: str or list(str)
-		path or list of paths to trajectory files in a sequential order
-
-	topol: str
-		path to a topology file to facilitate MDAnalysis Universe loading
-		usually required for trajectory processing
+	tags: list(str), dict(str: list(str))
+		tags describing each simulation step
 
 	funcs: list(functions)
 		list of functions to apply along the trajectory
@@ -48,49 +47,118 @@ class PropertyAnalyser:
 		func_names=None
 	):
 
-		# energy, trajectory files and Unioverse instances for analysis
-		self.simulations = self._check_type(simulations)
+		# energy files, trajectory files and Universe instances for analysis
+		self.simulations = self._check_input(simulations)
 		
-		# autofill tags if none?
-		self.tags = self._check_type(tags)
+		# autofill names for simulation steps
+		if tags is None:
+			self.tags = [
+				{'name': f"Simulation_{i}"} for i in range(1, len(self.simulations) + 1)
+			]
+		# tags from input
+		else:
+			self.tags = self._transform_tags(tags)
 
 		# functions to be applied along the trajectory/Universe
 		self.funcs = funcs
-		self.func_names = self._check_type(func_names)
+		self.func_names = func_names
 
 		# pandas DataFrame with extracted data
 		self.data = None
 	
 	@classmethod
-	def _check_type(self, var):
+	def _check_var_type(self, var):
 		"""
-		Check that var is None, str or list(str)
-		If str, convert to list(str)
+		Check that var is one of the supported types:
+		- None
+		- str
+		- tuple(str, str)
+		- mda.Universe
 	
-		Returns list(srt)
+		Returns
+		----------
+		check: bool
+			True if correct type
 		"""
 	
 		# is None
 		if var is None:
-			checked_var = var
+			check = True
 	
-		# is str
-		elif isinstance(var, str):
-			checked_var = [var]
-	
-		# if it's a list, are all elements str?
-		elif isinstance(var, list):
-			check_list = [isinstance(v, str) for v in var]
-			if False not in check_list:
-				checked_var = var
-			else: 
-				raise Exception("input should be str or list(str)")
+		# is str or mda. Universe
+		elif isinstance(var, str) \
+		  or isinstance(var, mda.Universe):
+			check = True
+
+		# tuple(str, str)
+		elif isinstance(var, tuple) and \
+		     isinstance(var[0], str) and isinstance(var[1], str):
+		    check = True
 				
 		# if neither then raise exception
 		else:
-			raise Exception("input should be str or list(str)")
+			check = False
+	
+		return check
+
+	@classmethod
+	def _check_input(self, var):
+		"""
+		Format input to list of the supported types:
+		- None
+		- str
+		- tuple(str, str)
+		- mda.Universe
+	
+		Returns
+		----------
+		list(str, tuple(str, str), mda.Universe)
+		"""
+
+		# if list check taht every element is of supported type
+		if isinstance(var, list):
+			for v in var:
+				if self._check_var_type(v):
+					continue
+				else: 
+					raise Exception("Couldn't process `simulations` arg. Check types")
+		
+		# if one element, check and convert to list
+		elif self._check_var_type(var):
+			checked_var = [var]
+
+		# if neither then raise exception
+		else:
+			raise Exception("Couldn't process `simulations` arg. Check types")
 	
 		return checked_var
+
+	@classmethod
+	def _transform_tags(self, tags):
+		"""
+		Convert the format of tags so that every simulation
+		has a corresponding dict of tags
+		
+		Returns
+		----------
+		list(dict(str: str))
+		"""
+
+		# if list of names
+		if isinstance(tags, list):
+			tags = [ {'name': str(tag)} ]
+
+		# if dictionary, transform it
+		elif isinstance(tags, dict):
+			tags = [
+				dict(zip(tags, i)) for i in zip(*tags.values())
+			]
+
+		else:
+			raise Exception("Couldn't process `tags`. Check format")
+
+		return tags
+
 
 	def _get_transformations(self, system):
 		"""
@@ -129,44 +197,45 @@ class PropertyAnalyser:
 
 		return workflow
 
-	def _read_edrs(self, tu, sequential):
+	def _read_edr(self, file, tags, tu, sequential):
 		"""
-		Read data from edr files and 
-		append it to self.data
+		Read data from edr file and append it to self.data
 
-		tu - str, time units option, ns or ps
+		Parameters
+		----------
+	
+		file: str
+			path to edr file
+
+		tu: str
+			time units option, ns or ps
 		
-		sequential - bool, if True then supplied files
-		are considered sequential steps and `Time` 
-		is adjusted accordingly, deffault True
+		sequential:
+			bool, if True then `Time` is adjusted when appending to self.data
+			to indicate sequential simulations
 
-		Returns self
+		Returns
+		----------
+		self
 		"""
 
-		# to make continuous timeline
-		# from several edr files
-		end_time = 0
+		# read edr data into pd.DataFrame
+		df = panedr.edr_to_df(edr)
 
-		for edr in self.edr:
-
-			# read edr data into pd.DataFrame
-			df = panedr.edr_to_df(edr)
-
-			# convert time if needed
-			if tu == 'ns':
-				df['Time'] = df['Time'] / 1000
-				
-			# update time for sequential steps
-			if sequential:
-				step_duration = df.Time.iloc[-1]
-				df['Time'] += end_time
-				end_time += step_duration
+		# convert time to ns if needed
+		if tu == 'ns':
+			df['Time'] = df['Time'] / 1000
 			
-			# add step_name column
-			df['Step_name'] = edr.split('/')[-1][:-4]
-			
-			# append to self.data
-			self.data = pd.concat([self.data, df]).reset_index(drop=True)
+		# shift Time for sequential steps
+		if sequential and (self.data is not None):
+			df['Time'] += self.data.Time.iloc[-1]
+		
+		# add tag columns
+		for tag in tags:
+			df[tag] = tags[tag]
+		
+		# append to self.data
+		self.data = pd.concat([self.data, df]).reset_index(drop=True)
 			
 		return self
 
@@ -320,7 +389,7 @@ class PropertyAnalyser:
 		----------
 		
 		tu - str
-			convert to these time units, ns or ps, default ns
+			convert to these time units; ns or ps, default ns
 
 		For trajectory analysis only:
 
@@ -349,27 +418,25 @@ class PropertyAnalyser:
 			raise Exception("No simulation data provided")
 		
 		# analyse each simulation input
-		for sim in self.simulations:
+		for sim, tags in zip(self.simulations, self.tags):
 
-			# classify simulation input
-			input_type = self._get_input_type(sim)
+			# single file is expected to be .edr
+			if isinstance(sim, str):
 
-			# analyse energy file
-			if input_type == 'edr':
-
-				self._read_edrs(
-					sim
+				self._read_edr(
+					file = sim,
+					tags = tags,
 					tu = tu,
 					sequential = sequential
 				)
 
 			# analyse trajectory
-			else:
+			elif:
 
 				# transform trj file into MDAnalysis Universe
-				if input_type == 'trj':
+				# if input_type == 'trj':
 
-					sim = # load universe
+				# 	sim = # load universe
 
 				self._analyse_trjs(
 					sim
