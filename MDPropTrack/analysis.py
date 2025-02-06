@@ -22,8 +22,9 @@ class PropertyAnalyser:
 				 list(str, tuple(str, str), mda.Universe)
 		simulation data for analysis
 
-	tags: list(str), dict(str: list(str))
-		tags describing each simulation step
+	tags: list(str), dict(str: list(str)
+		tags describing each simulation
+		list(str) is assumend to be a list of simulation names
 
 	funcs: list(functions)
 		list of functions to apply along the trajectory
@@ -92,8 +93,8 @@ class PropertyAnalyser:
 
 		# tuple(str, str)
 		elif isinstance(var, tuple) and \
-		     isinstance(var[0], str) and isinstance(var[1], str):
-		    check = True
+			 isinstance(var[0], str) and isinstance(var[1], str):
+			check = True
 				
 		# if neither then raise exception
 		else:
@@ -125,13 +126,13 @@ class PropertyAnalyser:
 		
 		# if one element, check and convert to list
 		elif self._check_var_type(var):
-			checked_var = [var]
+			var = [var]
 
 		# if neither then raise exception
 		else:
 			raise Exception("Couldn't process `simulations` arg. Check types")
 	
-		return checked_var
+		return var
 
 	@classmethod
 	def _transform_tags(self, tags):
@@ -146,7 +147,7 @@ class PropertyAnalyser:
 
 		# if list of names
 		if isinstance(tags, list):
-			tags = [ {'name': str(tag)} ]
+			tags = [ {'name': str(t)} for t in tags]
 
 		# if dictionary, transform it
 		elif isinstance(tags, dict):
@@ -159,45 +160,7 @@ class PropertyAnalyser:
 
 		return tags
 
-
-	def _get_transformations(self, system):
-		"""
-		Define transformations for the trajectory
-		
-		system - MDAnalysis Universe
-		"""
-
-		# unwrap atoms by default
-		ag = system.atoms
-		workflow = [transformations.unwrap(ag)]
-
-		# check additional transformation groups
-		if self.center_group is not None:
-			
-			center_group = system.select_atoms(self.center_group)
-
-			# add centering
-			if len(center_group.atoms) > 0:
-				workflow.extend([
-					transformations.center_in_box(center_group),
-					transformations.wrap(ag, compound='residues')
-				])	
-
-		if self.rot_trans_group is not None:
-			
-			fit_group = system.select_atoms(self.rot_trans_group)
-			system_ref = system.copy()
-			fit_group_ref = system_ref.select_atoms(self.rot_trans_group)
-
-			# add rotation and translation
-			if len(fit_group.atoms) > 0:
-				workflow.extend([
-					transformations.fit_rot_trans(fit_group, fit_group_ref)
-				])
-
-		return workflow
-
-	def _read_edr(self, file, tags, tu, sequential):
+	def _read_edr(self, edr, tags, tu, sequential):
 		"""
 		Read data from edr file and append it to self.data
 
@@ -206,6 +169,9 @@ class PropertyAnalyser:
 	
 		file: str
 			path to edr file
+
+		tags: dict(str: str)
+			tag comuns to be added to extarcted data
 
 		tu: str
 			time units option, ns or ps
@@ -234,8 +200,18 @@ class PropertyAnalyser:
 		for tag in tags:
 			df[tag] = tags[tag]
 		
-		# append to self.data
-		self.data = pd.concat([self.data, df]).reset_index(drop=True)
+		# add df do self.data on time and tag columns
+		if self.data is not None:
+			self.data = pd.merge(
+				self.data,
+				trj_dat,
+				on = ['Time'] + list(tags.keys()),
+				how = 'outer'
+			)
+
+		# or just save df as self.data
+		else:
+			self.data = df
 			
 		return self
 
@@ -244,13 +220,21 @@ class PropertyAnalyser:
 		Apply all functions to the trajectory
 		Returns calculated properties as pd.DataFrame
 		
-		system - MDAnalysis Universe, trajectory for analysis
-		tu - str, time units to use, 'ns' or 'ps'
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
+		Parameters
+		----------
+
+		system: mda.Universe
+			trajectory for analysis
+		
+		step: int
+			step for analysis
+
+		verbose: bool
+			verbose the trj analysis process
 
 		Returns
-		trj_dat - pd.DataFrame with Time and Properties
+		----------
+		trj_dat - pd.DataFrame with Time and calculated properties
 		"""
 
 		# initiate data with 'Time' column
@@ -299,86 +283,76 @@ class PropertyAnalyser:
 		
 		return trj_dat
 		
-	def _analyse_trjs(self, tu, step, verbose, sequential):
+	def _analyse_trj(self, trj, tags, tu, step, verbose, sequential):
 		"""
-		Calculate properties along the trajectories
-		and appends them to self.data
+		Calculate properties along the trajectory
+		and append data to self.data
 		
-		tu - str, time units to use, 'ns' or 'ps'
+		Parameters
+		----------
 		
-		step - int, step for trajectory analysis
+		trj: mda.Universe
+			system fopr analysis
 
-		verbose - bool, report trajectory analysis progress
+		tags: dict(str: str)
+			tag comuns to be added to extarcted data
 
-		sequential - bool, if True then supplied files
-		are considered sequential step and the Time 
-		is adjusted accordingly
-		deffault, True
+		tu: str
+			time units option, ns or ps
+
+		step: int
+			step for analysis
+
+		verbose: bool
+			verbose the trj analysis process
 		
-		Returns self	
+		sequential:
+			bool, if True then `Time` is adjusted when appending to self.data
+			to indicate sequential simulations
+
+		Returns
+		----------
+		self	
 		"""
 
-		# define time units conversion
-		t_norm = 1000 if tu == 'ns' else 1
-		end_time = 0
-		
-		# list of DataFames with data
-		# from trajectories
-		trj_dat_combined = []
-		
-		# iterate over trajectories 
-		for trj in self.trj:
-
-			if verbose:
-				print(f"Loading and transforming '{trj}'...")
-
-			# load trajectory
-			system = mda.Universe(trj) if self.topol is None \
-					 else mda.Universe(self.topol[0], trj)
-		
-			# system.trajectory.add_transformations(*workflow)
-			system.trajectory.add_transformations(
-				*self._get_transformations(system)
+		if verbose:
+			trj_name = ', '.join(
+				[f'{t}: {tags[t]}' for t in tags]
 			)
+			print(f"Analysing trj {trj_name}...")
 
-			# calculate properties over the trajectory
-			trj_dat = self._apply_funcs_trj(
-				system = system,
-				step = step,
-				verbose = verbose
-			)
-			
-			# shift time for sequential steps
-			if sequential:
-				system.trajectory[-1]
-				trj_dat['Time'] += end_time
-				end_time += system.trajectory.time
-			
-			# add step_name column
-			trj_dat['Step_name'] = trj.split('/')[-1][:-4]
-
-			# add to list
-			trj_dat_combined.append(trj_dat)
-		
-		# concatenate data from all trajectories
-		trj_dat_combined = pd.concat(trj_dat_combined).reset_index(drop=True)
+		# calculate properties over the trajectory
+		trj_dat = self._apply_funcs_trj(
+			system = trj,
+			step = step,
+			verbose = verbose
+		)
 		
 		# adjust time units
-		trj_dat_combined['Time'] = trj_dat_combined['Time'] / t_norm
+		if tu == 'ns':
+			trj_dat['Time'] = trj_dat['Time'] / 1000
 
-		# bind trj_data do self.data on time
+		# shift Time for sequential steps
+		if sequential and (self.data is not None):
+			trj_dat['Time'] += self.data.Time.iloc[-1]
+		
+		# add tag columns
+		for tag in tags:
+			trj_dat[tag] = tags[tag]
+		
+		# add trj_data do self.data on time and tag columns
 		if self.data is not None:
 			self.data = pd.merge(
 				self.data,
-				trj_dat_combined,
-				on = ['Time', 'Step_name'],
+				trj_dat,
+				on = ['Time'] + list(tags.keys()),
 				how = 'outer'
 			)
 
 		# or just save trj data as self.data
 		else:
-			self.data = trj_dat_combined
-		
+			self.data = trj_dat
+
 		return self
 
 	def extract_properties(self, tu='ns', step=1, sequential=False, verbose=False):
@@ -424,22 +398,25 @@ class PropertyAnalyser:
 			if isinstance(sim, str):
 
 				self._read_edr(
-					file = sim,
+					edr = sim,
 					tags = tags,
 					tu = tu,
 					sequential = sequential
 				)
 
 			# analyse trajectory
-			elif:
+			else:
 
 				# transform trj file into MDAnalysis Universe
-				# if input_type == 'trj':
+				if isinstance(sim, tuple):
+					trj = mda.Universe(sim[0], sim[1])
+				else:
+					trj = sim
 
-				# 	sim = # load universe
-
-				self._analyse_trjs(
-					sim
+				# analyse trajectory
+				self._analyse_trj(
+					trj=trj,
+					tags=tags,
 					tu = tu,
 					step = step,
 					sequential = sequential, 
@@ -599,23 +576,39 @@ class PropertyAnalyser:
 					
 		return fig, axs
 		
-	def plot(self,
-			 properties_to_plot=['Potential', 'Temperature', 'Pressure', 'Volume'],
-			 plot_convergence=False,
-			 labels=None,
-			 x_lab='Time, ns',
-			 cmap='Set1',
-			 figure_kwargs=None, 
-			 style_kwargs={"style": "darkgrid", "rc": {"grid.color": ".6", "grid.linestyle": ":"}},
-			 sns_kwargs={'alpha': 0.7}):
+	def plot(
+			self,
+			properties_to_plot=['Potential', 'Temperature', 'Pressure', 'Volume'],
+			plot_convergence=False,
+			hue='name',
+			labels=None,
+			x_lab='Time, ns',
+			cmap='Set1',
+
+			figure_kwargs=None, 
+
+			style_kwargs={
+				"style": "darkgrid",
+				"rc": {"grid.color": ".6", "grid.linestyle": ":"}
+			},
+
+			sns_kwargs={'alpha': 0.7}
+		):
 		"""
 		Plot properties from self.data using the 'Time' column as X-axis
 		
-		properties_to_plot - list(str) list of features to plot
-		Only works with column names from self.data
-		default list: 'Total Energy', 'Temperature', 'Pressure', 'Volume'
+		Parameters
+		----------
+
+		properties_to_plot: list(str)
+			list of columnds from self.data to plot
+			default list: ['Potential', 'Temperature', 'Pressure', 'Volume']
+
+		plot_convergence: bool
+			Plot convergence instread of time series; default False
 		
-		labels - list(str), list of cunstom names for plotted steps
+		labels: list(str)
+			list of custom names for plotted steps
 
 		x_lab - str, x axis label, defalut 'Time, ns'
 		
@@ -717,7 +710,7 @@ class LipidPropertyCalculator:
 			calculate=['apl', 'thickness', 'order_param'],
 			filter_lipid=['all'],
 			leaflet_to_average=0,
-			bin_len_leaflets=10,
+			bin_len_leaflets=15,
 			bin_len_thickness=20
 		):
 		"""
