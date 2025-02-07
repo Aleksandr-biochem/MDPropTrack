@@ -199,10 +199,10 @@ class PropertyAnalyser:
 		"""
 
 		# tag combination in this df
-		tag_combination = np.unique(
+		tag_combination = set(np.unique(
 			df[self.tag_names].values.astype(str),
 			axis=0
-		)[0]
+		)[0])
 
 		# if self.data is empty
 		if self.data is None:
@@ -1309,7 +1309,7 @@ class ProteinPropertyCalculator:
 		
 		rms.run(
 			step = step,
-			verbose = True
+			verbose = verbose
 		)
 
 		return rms.results.rmsd[:, -len(self.protein_sel):]
