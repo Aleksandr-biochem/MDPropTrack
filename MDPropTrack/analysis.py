@@ -775,6 +775,9 @@ class PropertyAnalyser:
 
 		x_lab: str,
 			x axis label, defalut 'Time, ns'
+
+		palette: str, list(str), mplt cmap
+			seaborn colourmap name, a list of colours or mplt cmap
 		
 		figure_kwargs: dict
 			matplotlib figure kwargs
@@ -812,7 +815,7 @@ class PropertyAnalyser:
 			)
 
 			# define custom palette
-			elif palette is not None:
+			if palette is not None:
 				sns_kwargs['palette'] = palette
 			else:
 				sns_kwargs['palette'] = self._custom_palette
