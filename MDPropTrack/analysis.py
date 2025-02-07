@@ -6,7 +6,6 @@ from tqdm import tqdm
 import MDAnalysis as mda
 import lipyphilic as lpp
 import matplotlib.pyplot as plt
-from MDAnalysis import transformations
 from matplotlib.colors import LinearSegmentedColormap, to_rgba_array
 
 class PropertyAnalyser:
@@ -85,13 +84,11 @@ class PropertyAnalyser:
 		self.tau_data = None
 
 		# internal colour-blind friendly cmap
-		self._custom_cmap = self.hex_to_cmap(
-			hex_colours = [
-			 '#648fff', '#dc267f', 
-			 '#785ef0', '#fe6100',
-			 '#ffb000', '#000000'
-			]
-		)
+		self._custom_palette = [
+			'#648fff', '#dc267f', 
+			'#785ef0', '#fe6100',
+			'#ffb000', '#000000'
+		]
 	
 	@classmethod
 	def _check_var_type(self, var):
@@ -669,33 +666,33 @@ class PropertyAnalyser:
 
 	##################################
 	
-	@staticmethod
-	def hex_to_cmap(self, hex_colours):
-		"""
-		Produce a colormap from a list of discrete colors without interpolation
+	# @staticmethod
+	# def hex_to_cmap(self, hex_colours):
+	# 	"""
+	# 	Produce a colormap from a list of discrete colors without interpolation
 		
-		Parameters
-		----------
+	# 	Parameters
+	# 	----------
 
-		hex_colours: list(str)
-			list of hex colour codes
+	# 	hex_colours: list(str)
+	# 		list of hex colour codes
 
-		Returns
-		----------
-		colourmap
-		"""
+	# 	Returns
+	# 	----------
+	# 	colourmap
+	# 	"""
 
-		# covert to rgb and reshape
-		clrs = to_rgba_array(hex_colours)
-		clrs = np.vstack([clrs[0], clrs, clrs[-1]])
+	# 	# covert to rgb and reshape
+	# 	clrs = to_rgba_array(hex_colours)
+	# 	clrs = np.vstack([clrs[0], clrs, clrs[-1]])
 
-		colour_dict = {
-			prime_color : [
-				(i / (len(clrs) - 2.), clrs[i, j], clrs[i + 1, j]) for i in range(len(clrs) - 1)
-			] for j, prime_color in enumerate(['red','green','blue'])
-		}
+	# 	colour_dict = {
+	# 		prime_color : [
+	# 			(i / (len(clrs) - 2.), clrs[i, j], clrs[i + 1, j]) for i in range(len(clrs) - 1)
+	# 		] for j, prime_color in enumerate(['red','green','blue'])
+	# 	}
 		
-		return LinearSegmentedColormap('Custom_cmap', colour_dict)
+	# 	return LinearSegmentedColormap('Custom_cmap', colour_dict)
 
 	def _construct_multiplot(self, n_prop, figure_kwargs):
 		"""
@@ -749,8 +746,7 @@ class PropertyAnalyser:
 			plot_convergence=False,
 			hue='name',
 			x_lab='Time, ns',
-
-			cmap=None,
+			palette=None,
 
 			figure_kwargs=None, 
 
@@ -815,12 +811,12 @@ class PropertyAnalyser:
 				figure_kwargs = figure_kwargs
 			)
 
-			# define custom cmap
-			if cmap is None:
-				cmap = self._custom_cmap
-			elif isinstance(cmap, list):
-				cmap = self.hex_to_cmap(cmap)
-				
+			# define custom palette
+			elif palette is not None:
+				sns_kwargs['palette'] = palette
+			else:
+				sns_kwargs['palette'] = self._custom_palette
+
 			# plot each property on a different subplot
 			for i, prop in enumerate(prop_list):
 				
@@ -835,7 +831,6 @@ class PropertyAnalyser:
 						x = 'Time',
 						y = 'tau',
 						hue = hue,
-						cmap = cmap,
 						ax = axs[i],
 						marker='o',
 						**sns_kwargs
@@ -854,7 +849,6 @@ class PropertyAnalyser:
 						x = 'Time',
 						y = prop,
 						hue = hue,
-						palette = cmap,
 						ax = axs[i],
 						**sns_kwargs
 					)
