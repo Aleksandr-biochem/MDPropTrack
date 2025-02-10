@@ -186,7 +186,7 @@ class PropertyAnalyser:
 	def load_data(self, file, tag_columns=['name'], read_csv_kwargs={'index_col': None}):
 		"""
 		Load DataFrame from file into self.data
-		Populate self.tag_names, self.properties and aelf._tag_combinations
+		Populate self.tag_names, self.properties and self._tag_combinations
 
 		Parameters
 		----------
@@ -220,6 +220,11 @@ class PropertyAnalyser:
 					self.properties.append(col)
 			else:
 				continue
+
+		# get tag combinations
+		self._tag_combinations = list(
+			self.data.groupby(self.tag_names).count().index
+		)
 
 		return self
 
