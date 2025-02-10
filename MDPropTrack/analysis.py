@@ -815,8 +815,8 @@ class PropertyAnalyser:
 		plot_convergence: bool
 			Plot convergence instread of time series; default False
 		
-		hue: str,
-			self.data column to use for hue, default 'name'
+		hue: str or list(str),
+			self.data column(s) to use for hue, default 'name'
 
 		x_lab: str,
 			x axis label, defalut 'Time, ns'
@@ -850,6 +850,15 @@ class PropertyAnalyser:
 				print(f"Skipping {prop}, not in self.data.columns")
 			else:
 				prop_list.append(prop)
+
+		# check if we need a new column for hue
+		if isinstance(hue, list):
+			hue_col = ' '.join(hue)
+			self.data[hue_col] = self.data[hue].apply(
+				lambda row: ' '.join([str(el) for el in row]), axis=1
+			)
+		else:
+			hue_col = hue
 				
 		# apply seaborn style to the plot
 		with sns.axes_style(**style_kwargs):
@@ -878,7 +887,7 @@ class PropertyAnalyser:
 						data=self.tau_data.query(f"Property == '{prop}'"),
 						x = 'Time',
 						y = 'tau',
-						hue = hue,
+						hue = hue_col,
 						ax = axs[i],
 						marker='o',
 						**sns_kwargs
@@ -896,7 +905,7 @@ class PropertyAnalyser:
 						data = self.data,
 						x = 'Time',
 						y = prop,
-						hue = hue,
+						hue = hue_col,
 						ax = axs[i],
 						**sns_kwargs
 					)
@@ -910,7 +919,11 @@ class PropertyAnalyser:
 				# set title and x-axis label 
 				axs[i].set_title(prop, fontweight='bold', fontsize=18, pad=10)
 				axs[i].set_xlabel(x_lab, fontsize=15, labelpad=10)
-	
+		
+		# remove hue column from data if one was constructed
+		if hue_col != hue:
+			self.data.drop(columns=[hue_col])
+
 		plt.tight_layout()
 		
 		return fig, axs
