@@ -183,6 +183,46 @@ class PropertyAnalyser:
 
 		return tags
 
+	def load_data(self, file, tag_columns=['name'], read_csv_kwargs={'index_col': None}):
+		"""
+		Load DataFrame from file into self.data
+		Populate self.tag_names, self.properties and aelf._tag_combinations
+
+		Parameters
+		----------
+		
+		file: str
+			path to data file
+
+		read_csv_kwargs: dict
+			kwargs for pd.read_csv; default {'index_col': None}
+
+		tag_columns: list(str)
+			name of the columns that are tags,
+			Default ['name']
+
+		Returns
+		----------
+		self
+		"""
+
+		# read data file
+		self.data = pd.read_csv(file, **read_csv_kwargs)
+
+		# separate tags and properties
+		self.tag_names = []
+		self.properties = []
+		for col in self.data.columns:
+			if col != 'Time':
+				if col in tag_columns:
+					self.tag_names.append(col)
+				else:
+					self.properties.append(col)
+			else:
+				continue
+
+		return self
+
 	def _append_data(self, df):
 		"""
 		Append DataFrame to self.data with proper tag merger
