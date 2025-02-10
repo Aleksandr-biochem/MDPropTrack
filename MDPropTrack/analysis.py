@@ -789,6 +789,8 @@ class PropertyAnalyser:
 			self,
 			properties_to_plot=['Potential', 'Temperature', 'Pressure', 'Volume'],
 			plot_convergence=False,
+			subplot_by=None,
+			query=None,
 			hue='name',
 			x_lab='Time, ns',
 			palette=None,
@@ -815,6 +817,14 @@ class PropertyAnalyser:
 		plot_convergence: bool
 			Plot convergence instread of time series; default False
 		
+		subplot_by: str or list(str),
+			self.data column(s) to use for subplot separation
+			Default None, will subplot only by properties_to_plot
+		
+		query: str
+			The query string to evaluate for pd.query().
+			Used to subset a part of pa.data for plotting. Default None
+
 		hue: str or list(str),
 			self.data column(s) to use for hue, default 'name'
 
@@ -850,6 +860,14 @@ class PropertyAnalyser:
 				print(f"Skipping {prop}, not in self.data.columns")
 			else:
 				prop_list.append(prop)
+		
+		# define subplots contents 
+		subplot_spec = {}
+		# generate names for subplots
+		# for each subplot define
+		# prop to plot
+		# query so filter self.data
+		#
 
 		# check if we need a new column for hue
 		if isinstance(hue, list):
@@ -859,23 +877,24 @@ class PropertyAnalyser:
 			)
 		else:
 			hue_col = hue
-				
+		
+		# define palette
+		if palette is not None:
+			sns_kwargs['palette'] = palette
+		else:
+			sns_kwargs['palette'] = self._custom_palette
+
 		# apply seaborn style to the plot
 		with sns.axes_style(**style_kwargs):
-	
+			
+
 			fig, axs = self._construct_multiplot(
-				n_prop = len(prop_list),
+				n_subplots = len(subplot_spec),
 				figure_kwargs = figure_kwargs
 			)
 
-			# define custom palette
-			if palette is not None:
-				sns_kwargs['palette'] = palette
-			else:
-				sns_kwargs['palette'] = self._custom_palette
-
 			# plot each property on a different subplot
-			for i, prop in enumerate(prop_list):
+			for i, subplot_name in enumerate(subplot_spec):
 				
 				# for convergence
 				if plot_convergence:
@@ -884,9 +903,11 @@ class PropertyAnalyser:
 						self.estimate_convergence()
 
 					sns.lineplot(
-						data=self.tau_data.query(f"Property == '{prop}'"),
+						data=self.tau_data.query(
+							subplot_spec[subplot_name]['query']
+						),
 						x = 'Time',
-						y = 'tau',
+						y = subplot_spec[subplot_name]['prop'],
 						hue = hue_col,
 						ax = axs[i],
 						marker='o',
@@ -902,25 +923,27 @@ class PropertyAnalyser:
 				# for regular time plots
 				else:
 					sns.lineplot(
-						data = self.data,
+						data = self.data.query(
+							subplot_spec[subplot_name]['query']
+						),
 						x = 'Time',
-						y = prop,
+						y = subplot_spec[subplot_name]['prop'],
 						hue = hue_col,
 						ax = axs[i],
 						**sns_kwargs
 					)
 					
 					axs[i].set_ylabel(
-						prop,
+						subplot_spec[subplot_name]['prop'],
 						fontsize=15,
 						labelpad=10
 					)
 
 				# set title and x-axis label 
-				axs[i].set_title(prop, fontweight='bold', fontsize=18, pad=10)
+				axs[i].set_title(subplot_name, fontweight='bold', fontsize=18, pad=10)
 				axs[i].set_xlabel(x_lab, fontsize=15, labelpad=10)
 		
-		# remove hue column from data if one was constructed
+		# remove special hue column from data if it was constructed
 		if hue_col != hue:
 			self.data.drop(columns=[hue_col])
 
