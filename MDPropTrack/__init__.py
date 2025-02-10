@@ -1,2 +1,2 @@
 from .analysis import PropertyAnalyser
-from .analysis import LipidPropertyCalculator, ProteinPropertyCalculator
+from .property_calculators import LipidPropertyCalculator, ProteinPropertyCalculator
