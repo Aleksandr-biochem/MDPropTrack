@@ -4,7 +4,6 @@ import pandas as pd
 import seaborn as sns
 import MDAnalysis as mda
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, to_rgba_array
 
 class PropertyAnalyser:
 	"""
@@ -171,9 +170,11 @@ class PropertyAnalyser:
 			tags = [ {'name': str(t)} for t in tags]
 
 		# if dictionary, transform it
+		# make sure that all tag values are str
 		elif isinstance(tags, dict):
 			tags = [
-				dict(zip(tags, i)) for i in zip(*tags.values())
+				 {t: str(v) for t, v in zip(tags, val_comb)} \
+				 for val_comb in zip(*tags.values())
 			]
 
 		else:
@@ -219,6 +220,10 @@ class PropertyAnalyser:
 			else:
 				continue
 
+		# make sure that tag columns are string
+		for tag in self.tag_names:
+			self.data[tag] = self.data[tag].astype('string')
+
 		# get tag combinations
 		self._tag_combinations = list(
 			self.data.groupby(self.tag_names).count().index
@@ -243,7 +248,7 @@ class PropertyAnalyser:
 
 		# tag combination in this df
 		tag_combination = set(np.unique(
-			df[self.tag_names].values.astype(str),
+			df[self.tag_names].values,
 			axis=0
 		)[0])
 
@@ -709,6 +714,7 @@ class PropertyAnalyser:
 
 	##################################
 	
+	# from matplotlib.colors import LinearSegmentedColormap, to_rgba_array
 	# @staticmethod
 	# def hex_to_cmap(self, hex_colours):
 	# 	"""
@@ -737,15 +743,15 @@ class PropertyAnalyser:
 		
 	# 	return LinearSegmentedColormap('Custom_cmap', colour_dict)
 
-	def _construct_multiplot(self, n_prop, figure_kwargs):
+	def _construct_multiplot(self, n_subplots, figure_kwargs):
 		"""
 		Construct subplot grid
 
 		Parameters
 		----------
 
-		n_prop: int
-			number of properties to plot
+		n_subplots: int
+			number of subplots on the grid
 		
 		figure_kwargs: dict
 			matplotlib figure kwargs
@@ -754,52 +760,139 @@ class PropertyAnalyser:
 		----------
 		fig, axs - mplt Figure and list(Axes)
 		"""
+	
+		if n_subplots > 1:
+			ncols = 2
+			nrows = (n_subplots // 2) + (n_subplots % 2)
+		else:
+			ncols = 1
+			nrows = 1
 
-		# custom parameters for multiplot
+		internal_figure_kwargs = {
+			'ncols': ncols,
+			'nrows': nrows,
+			'figsize': (10 * ncols, 5 * nrows)
+		}
+
+		# overwrite from figure_kwargs
 		if figure_kwargs is not None:
-			fig, axs = plt.subplots(**figure_kwargs)
-		
-		# define from n_prop
-		else: 
-			
-			if n_prop > 1:
-				ncols = 2
-				nrows = (n_prop // 2) + (n_prop % 2)
-			else:
-				ncols = 1
-				nrows = 1
+			for key in figure_kwargs:
+				internal_figure_kwargs[key] = figure_kwargs[key]
 
-			fig, axs = plt.subplots(
-				ncols = ncols,
-				nrows = nrows,
-				figsize = (10 * ncols, 5 * nrows)
-			)
+		fig, axs = plt.subplots(
+			**internal_figure_kwargs
+		)
 
 		# transform to 1D array of Axes
 		if isinstance(axs, np.ndarray):
 			axs = axs.flatten()
 		else:
 			axs = np.array([axs])
-					
+
 		return fig, axs
 	
+	def _get_subplot_specs(self, properties_to_plot, subplot_by, query, plot_convergence):
+		"""
+		Define specifications for each subplot:
+		- property to plot
+		- data subset to work on
+		
+		Parameters
+		----------
+		
+		properties_to_plot: str or list(str)
+			columns from self.data to plot, default None
+
+		subplot_by: str or list(str),
+			self.data column(s) to use for subplot separation
+			Default None, will subplot only by properties_to_plot
+
+		query: str
+			The query string to evaluate for pd.query().
+			Used to subset a part of self.data for plotting
+
+		plot_convergence: bool
+			Plot convergence instread of time series
+
+		Returns
+		----------
+		subplot_specs: dict(subplot_name: {'query': str, 'prop': str})
+		"""
+
+		# make sure that we have list(str)
+		prop_list = self._check_input(properties_to_plot)
+
+		# define subplot grouping from 'subplot_by' arg
+		if subplot_by is None:
+			subplot_queries = [(None, query)]
+		else:
+			
+			subplot_queries = []
+
+			# tags that are used to group data for subplots
+			grouping_tags = self._check_input(subplot_by)
+
+			# get unique combinations of tags values to query
+			tag_val_combs = list(
+				self.tau_data.groupby(grouping_tags).count().index
+			) if plot_convergence else list(
+				self.data.groupby(grouping_tags).count().index
+			)
+
+			# this shopild be list of tuples
+			if isinstance(tag_val_combs[0], str):
+				tag_val_combs = [(v, ) for v in tag_val_combs]
+
+			# define all queries
+			for tag_val_comb in tag_val_combs:
+				
+				# define query name as tag value combination
+				query_name = ' '.join(tag_val_comb)
+
+				# construct query expression
+				query_expr = ' & '.join(
+					[f"{t} == '{v}'" for t, v in zip(grouping_tags, tag_val_comb)]
+				)
+
+				# add additional query if requested
+				if query is not None:
+					query_expr= f"({query_expr}) & ({query})"
+
+				subplot_queries.append(
+					(query_name, query_expr)
+				)
+
+		# define specifications for each subplot
+		subplot_specs = {}
+		for prop in prop_list:
+			for query_name, query_expr in subplot_queries:
+				
+				# define subplot title
+				subplot_name = prop if query_name is None \
+							   else f'{prop}, {query_name}'
+				
+				# define property toplot and query for self.data
+				subplot_specs[subplot_name] = {
+					'prop': prop,
+					'query': query_expr
+				}
+
+		return subplot_specs
+
 	def plot(
 			self,
-			properties_to_plot=['Potential', 'Temperature', 'Pressure', 'Volume'],
+			properties_to_plot=None,
 			plot_convergence=False,
 			subplot_by=None,
 			query=None,
 			hue='name',
 			x_lab='Time, ns',
 			palette=None,
-
 			figure_kwargs=None, 
-
 			style_kwargs={
 				"style": "darkgrid",
 				"rc": {"grid.color": ".6", "grid.linestyle": ":"}
 			},
-
 			sns_kwargs={'alpha': 0.7}
 		):
 		"""
@@ -808,9 +901,8 @@ class PropertyAnalyser:
 		Parameters
 		----------
 
-		properties_to_plot: list(str)
-			list of columnds from self.data to plot
-			default list: ['Potential', 'Temperature', 'Pressure', 'Volume']
+		properties_to_plot: str or list(str)
+			columns from self.data to plot, default None
 
 		plot_convergence: bool
 			Plot convergence instread of time series; default False
@@ -821,7 +913,7 @@ class PropertyAnalyser:
 		
 		query: str
 			The query string to evaluate for pd.query().
-			Used to subset a part of pa.data for plotting. Default None
+			Used to subset a part of self.data for plotting. Default None
 
 		hue: str or list(str),
 			self.data column(s) to use for hue, default 'name'
@@ -849,23 +941,17 @@ class PropertyAnalyser:
 		# do we have data to plot
 		if self.data is None:
 			raise Exception("self.data is None")
+		# and for convergence plots
+		if plot_convergence and (self.tau_data is None):
+			self.estimate_convergence()
 
-		# check whether requested properties
-		# are in self.data
-		prop_list = []
-		for prop in properties_to_plot:
-			if prop not in self.data.columns:
-				print(f"Skipping {prop}, not in self.data.columns")
-			else:
-				prop_list.append(prop)
-		
-		# define subplots contents 
-		subplot_spec = {}
-		# generate names for subplots
-		# for each subplot define
-		# prop to plot
-		# query so filter self.data
-		#
+		# define subplot_specs
+		subplot_specs = self._get_subplot_specs(
+			properties_to_plot=properties_to_plot,
+			subplot_by=subplot_by,
+			query=query,
+			plot_convergence=plot_convergence
+		)
 
 		# check if we need a new column for hue
 		if isinstance(hue, list):
@@ -882,64 +968,56 @@ class PropertyAnalyser:
 		else:
 			sns_kwargs['palette'] = self._custom_palette
 
-		# apply seaborn style to the plot
+		# use clear marker for convergence plot
+		if plot_convergence and ('marker' not in sns_kwargs.keys()):
+			sns_kwargs['marker'] = 'o'
+
+		# use seaborn style for this multiplot
 		with sns.axes_style(**style_kwargs):
 			
-
+			# define subplot grid
 			fig, axs = self._construct_multiplot(
-				n_subplots = len(subplot_spec),
+				n_subplots = len(subplot_specs),
 				figure_kwargs = figure_kwargs
 			)
 
-			# plot each property on a different subplot
-			for i, subplot_name in enumerate(subplot_spec):
-				
-				# for convergence
-				if plot_convergence:
-					
-					if self.tau_data is None:
-						self.estimate_convergence()
+			# populate each subplot
+			for i, subplot_name in enumerate(subplot_specs):
 
-					sns.lineplot(
-						data=self.tau_data.query(
-							subplot_spec[subplot_name]['query']
-						),
-						x = 'Time',
-						y = subplot_spec[subplot_name]['prop'],
-						hue = hue_col,
-						ax = axs[i],
-						marker='o',
-						**sns_kwargs
-					)
+				dat = 'tau_data' if plot_convergence else 'data'
 
-					axs[i].set_ylabel(
-						r"Autocorrelation time $\tau$", 
-						fontsize=15,
-						labelpad=10
-					)
+				sns.lineplot(
+					data = getattr(self, dat) if subplot_specs[subplot_name]['query'] is None \
+						   else getattr(self, dat).query(subplot_specs[subplot_name]['query']),
+					x = 'Time',
+					y = subplot_specs[subplot_name]['prop'],
+					hue = hue_col,
+					ax = axs[i],
+					**sns_kwargs
+				)
 
-				# for regular time plots
-				else:
-					sns.lineplot(
-						data = self.data.query(
-							subplot_spec[subplot_name]['query']
-						),
-						x = 'Time',
-						y = subplot_spec[subplot_name]['prop'],
-						hue = hue_col,
-						ax = axs[i],
-						**sns_kwargs
-					)
-					
-					axs[i].set_ylabel(
-						subplot_spec[subplot_name]['prop'],
-						fontsize=15,
-						labelpad=10
-					)
+				# set title
+				axs[i].set_title(
+					subplot_name,
+					fontweight='bold',
+					fontsize=18,
+					pad=10
+				)
 
-				# set title and x-axis label 
-				axs[i].set_title(subplot_name, fontweight='bold', fontsize=18, pad=10)
-				axs[i].set_xlabel(x_lab, fontsize=15, labelpad=10)
+				# set y-label 
+				axs[i].set_ylabel(
+					ylabel= r"Autocorrelation time $\tau$" if plot_convergence \
+							else subplot_specs[subplot_name]['prop'], 
+					fontsize=15,
+					labelpad=10
+				)
+
+				# set x-axis label 
+				axs[i].set_xlabel(
+					x_lab,
+					fontsize=15,
+					labelpad=10
+				)
 		
 		# remove special hue column from data if it was constructed
 		if hue_col != hue:
