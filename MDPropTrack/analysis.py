@@ -886,6 +886,7 @@ class PropertyAnalyser:
 			subplot_by=None,
 			query=None,
 			hue='name',
+			x='Time',
 			x_lab='Time, ns',
 			palette=None,
 			figure_kwargs=None, 
@@ -917,6 +918,9 @@ class PropertyAnalyser:
 
 		hue: str or list(str),
 			self.data column(s) to use for hue, default 'name'
+		
+		x: str,
+			Column name to use as x-axis; default: 'Time'
 
 		x_lab: str,
 			x axis label, defalut 'Time, ns'
@@ -989,7 +993,7 @@ class PropertyAnalyser:
 				sns.lineplot(
 					data = getattr(self, dat) if subplot_specs[subplot_name]['query'] is None \
 						   else getattr(self, dat).query(subplot_specs[subplot_name]['query']),
-					x = 'Time',
+					x = x,
 					y = subplot_specs[subplot_name]['prop'],
 					hue = hue_col,
 					ax = axs[i],
