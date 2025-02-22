@@ -248,7 +248,7 @@ class PropertyAnalyser:
 
 		# tag combination in this df
 		tag_combination = set(np.unique(
-			df[self.tag_names].values,
+			df[self.tag_names].values.astype(str),
 			axis=0
 		)[0])
 
@@ -316,6 +316,7 @@ class PropertyAnalyser:
 		# add tag columns
 		for tag in tags:
 			df[tag] = tags[tag]
+			df[tag] = df[tag].astype('string')
 		
 		# append to self.data
 		self._append_data(df)
@@ -446,7 +447,8 @@ class PropertyAnalyser:
 		# add tag columns
 		for tag in tags:
 			trj_dat[tag] = tags[tag]
-		
+			trj_dat[tag] = trj_dat[tag].astype('string')
+
 		# append to self.data
 		self._append_data(trj_dat)
 
