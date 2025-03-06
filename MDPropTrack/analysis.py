@@ -182,7 +182,7 @@ class PropertyAnalyser:
 
 		return tags
 
-	def load_data(self, file, tag_columns=['name'], read_csv_kwargs={'index_col': None}):
+	def load_data(self, data, tag_columns=['name'], read_csv_kwargs={'index_col': None}):
 		"""
 		Load DataFrame from file into self.data
 		Populate self.tag_names, self.properties and self._tag_combinations
@@ -190,8 +190,8 @@ class PropertyAnalyser:
 		Parameters
 		----------
 		
-		file: str
-			path to data file
+		data: str or pd.DataFrame
+			path to data file or or pd.DataFrame to use as data
 
 		read_csv_kwargs: dict
 			kwargs for pd.read_csv; default {'index_col': None}
@@ -206,7 +206,13 @@ class PropertyAnalyser:
 		"""
 
 		# read data file
-		self.data = pd.read_csv(file, **read_csv_kwargs)
+		if isinstance(data, str):
+			self.data = pd.read_csv(data, **read_csv_kwargs)
+		elif isinstance(data, pd.DataFrame):
+			self.data = data
+		else:
+			raise Exception("data should be file path or pd.DataFrame")
+
 
 		# separate tags and properties
 		self.tag_names = []
