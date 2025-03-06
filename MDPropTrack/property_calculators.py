@@ -3,10 +3,179 @@ from tqdm import tqdm
 import MDAnalysis as mda
 import lipyphilic as lpp
 
+class BaseCalculator:
+	"""
+	Base class to construct property calculators
+	that are applied to trajectories
+
+	Class atributes hold parameters to be used in _single_frame method
+
+	Attributes
+	----------
+	"""
+
+	def __init__(self):
+		pass
+
+	def _single_frame(self, system):
+		"""
+		This method should perform some calculations on one frame
+		and return a property value
+
+		This method can use class attributes as parameters
+
+		Returns
+		----------
+		float, list(floats) or np.array(floats)
+		"""
+		pass
+
+	def Calc(self, system, step=1, verbose=False):
+		"""
+		Run calculation by applying self._single_frame()
+		along the trajectory
+
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
+
+		Returns
+		----------
+		np.array(floats)
+		"""
+
+		# to store results
+		results = []
+
+		if verbose:
+			print('Running property calculator...')
+
+		# iterate over trj and calculate property
+		iterator = system.trajectory[::step]
+		for ts in (tqdm(iterator) if verbose else iterator):
+			results.append(
+				self._single_frame(system)
+			)
+
+		return np.array(results)
+
+class GyrationRadiusCalculator(BaseCalculator):
+	"""
+	Class describing calculation of Rg along the trajectory
+
+	Class atributes hold parameters to be used in _single_frame method
+
+	Attributes
+	----------
+	protein_sel: str or list(str)
+		one of several selections for analysis
+
+	"""
+	
+	def __init__(self, protein_sel=None):
+
+		# protein_sel is a paramether for our calcvulator defining
+		# the atoms groups for Rg calculation
+		self.protein_sel = [protein_sel] if isinstance(protein_sel, str) \
+						   else protein_sel
+
+		# we can also define additional attributes to assist calculation
+		self.at_groups = None
+	
+	# we can create additional methods to assist calculation
+	# this method allows to make atom selections once
+	# to use them in every frame instead of calling select_atoms() every frame
+	def _make_selections(self, system):
+		"""
+		Make atom selection for Rg calculation
+		They are stored in self.at_groups
+
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		Returns
+		----------
+		self
+		"""
+
+		self.at_groups = [
+			system.select_atoms(sel) for sel in self.protein_sel
+		]
+
+		return self
+
+	def _single_frame(self, system):
+		"""
+		This method should perform some calculations on one frame
+		and return a property value
+
+		This method can use class attributes as parameters
+
+		Returns
+		----------
+		float, list(floats) or np.array(floats)
+		"""
+
+		# make atom selections if None
+		if self.at_groups is None:
+			self._make_selections(system)
+
+		# calculate Rg for every atom group
+		property_val = [
+			sel.radius_of_gyration() for sel in self.at_groups
+		]
+
+		return property_val
+
 class LipidPropertyCalculator:
 	"""
-	A class of with methods to calculate
+	A calculator class of with methods to compute
 	key lipid properties from the trajectory
+	
+	Class attributes hold parameters to be used in methods
+
+	Attributes
+	----------
+	lipid_sel: str
+		lipid group selection for leaflet identification
+		and membrane thickness calculation (usually phosphate)
+	
+	apl_sel: str,
+		atom selection to perform Voronoi Tesselation on
+
+	tail_sel: str
+		lipid tail selection that will be used for order parameter calculation
+	
+	calculate: str or list(str)
+		keywords of properties to calculate
+		choices: ['apl', 'thickness', 'order_param'], default all 3
+
+	filter_lipid: str or list(str)
+		one or multiple atom selections to filter lipids in APL and order parameter calculation
+
+	leaflet_to_average: int
+		leaflets to use for area per lipid averaging
+		-1 - lower
+		1  - upper
+		0  - both
+
+	bin_len_leaflets: float
+		bin width for leaflet identification, default 15
+	
+	bin_len_thickness: float
+		bin width for membrane thickness calculation, default 20
+
 	"""
 
 	def __init__(
@@ -20,31 +189,6 @@ class LipidPropertyCalculator:
 			bin_len_leaflets=15,
 			bin_len_thickness=20
 		):
-		"""
-		Class attributes hold parameters to be used in methods
-
-		lipid_sel - str, MDAnalysis selection of a lipid group for leaflet identification
-		and membrane thickness calculation (usually phosphate)
-		
-		apl_sel - atr, atom selection for the group to perform Voronoi Tesselation on
-
-		tail_sel - str, MDAnalysis selection for lipid tails
-		that will be used for order parameter calculation
-		
-		calculate - str or list(str), keywords of properties to calculate
-		choices: ['apl', 'thickness', 'order_param'], default all 3
-
-		filter_lipid - str or list(str), one or multiple atom selections
-		to filter lipids in APL and order parameter calculation
-
-		leaflet_to_average - int, leaflets to use for area per lipid averaging
-		-1 - lower
-		1  - upper
-		0  - both
-
-		bin_len_leaflets - float, bin width for leaflet identification, default 10
-		bin_len_thickness - float, bin width for membrane thickness calculation, default 20
-		"""
 		self.lipid_sel = lipid_sel
 		self.apl_sel=apl_sel
 		self.tail_sel = tail_sel
@@ -60,7 +204,23 @@ class LipidPropertyCalculator:
 	def _assign_leaflets(self, system, step=1, verbose=False):
 		"""
 		Run LiPyPhilic leaflet assignment over the trajectory
-		Labels stored in self.leaflets
+		Assigns self.leaflets
+		
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
+
+		Returns
+		----------
+		self
 		"""
 
 		# binning 
@@ -88,11 +248,20 @@ class LipidPropertyCalculator:
 		"""
 		Generate a mask to filter lipid species from bilayer
 		
-		system - MDAnalysis Universe, trajectory for analysis
-		main_sel - str, main atom selection for filtering
-		filter_sel - str, atom selection to combine with main selection
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
 
-		returns
+		main_sel: str
+			main atom selection for filtering
+			
+		filter_sel: str
+			atom selection to combine with main selection
+
+		Returns
+		----------
 		np.array(bool)
 		"""
 
@@ -114,11 +283,20 @@ class LipidPropertyCalculator:
 		- bilayer thickness
 		- orientational order parameter of lipid tails
 
-		system - MDAnalysis Universe, trajectory for analysis
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
 
 		Returns
+		----------
 		np.array(floats)
 		"""
 
@@ -160,20 +338,31 @@ class LipidPropertyCalculator:
 		"""
 		Calculate average area per lipid over trajectory 
 
-		system - MDAnalysis Universe, trajectory for analysis
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
+		Parameters
+		----------
 		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
+
 		Also requires:
-		self.lipid_sel - atom selection for lipids in the bilayer.
-		These atoms will also be used to perform the Voronoi tessellation
+		self.lipid_sel: str
+			atom selection for lipids in the bilayer.
+			These atoms will also be used to perform the Voronoi tessellation
 		
-		leaflet_to_average - int, leaflets to use for area per lipid averaging
-		-1 - lower
-		1  - upper
-		0  - both
+		self.leaflet_to_average: int
+			leaflets to use for area per lipid averaging
+			-1 - lower
+			1  - upper
+			0  - both
 
 		Returns
+		----------
 		np.array(floats)
 		"""
 
@@ -230,16 +419,26 @@ class LipidPropertyCalculator:
 		"""
 		Calculate bilayer_thickness over trajectory 
 
-		system - MDAnalysis Universe, trajectory for analysis
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
 		
 		Also requires:
-		self.lipid_sel - atom selection for lipids in the bilayer.
-		Atoms used to identify leaflets.
-		These atoms will also be used to define thickness.
+		self.lipid_sel: str
+			atom selection for lipids in the bilayer.
+			Atoms used to identify leaflets.
+			These atoms will also be used to define thickness.
 
 		Returns
+		----------
 		np.array(floats)
 		"""
 
@@ -277,15 +476,24 @@ class LipidPropertyCalculator:
 		Calculate average orientational order parameter
 		of lipid tails over trajectory 
 
-		system - MDAnalysis Universe, trajectory for analysis
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
 
 		Also requires:
-		self.tail_sel - atom selection(s) for lipid tails for 
-		order parameter calculation
+		self.tail_sel: str, list(str)
+			atom selection(s) for lipid tails for order parameter calculation
 
 		Returns
+		----------
 		np.array(floats)
 		"""
 
@@ -359,70 +567,54 @@ class LipidPropertyCalculator:
 
 		return np.array(scc_by_frame).T
 
-class ProteinPropertyCalculator:
+class RMSDCalculator:
 	"""
-	A class of with methods to calculate
-	key protein properties from the trajectory
-	"""
+	Class to calculare RMSD
 
-	def __init__(self, protein_sel=None, fit_sel=None):
-		"""
-		Class atributes hold parameters to be used in methods
+	Class atributes hold parameters to be used in methods
 
-		protein_sel - str, MDAnalysis atom selection 
-		for protein group for analysis
+	Attributes
+	----------
+	protein_sel: str or list(str)
+		one of several selections for analysis
 		
-		fit_sel - str, atom selection for superimposition in CalcRMSD
-		"""
+	fit_sel: str
+		atom selection for least squeare fit
+	"""
+
+	def __init__(
+		self,
+		protein_sel=None,
+		fit_sel=None
+	):
 		self.protein_sel = [protein_sel] if isinstance(protein_sel, str) \
 						   else protein_sel
 		self.fit_sel = fit_sel
 
-	def CalcGyrationRadius(self, system, step=1, verbose=False):
+	def Calc(self, system, step=1, verbose=False):
 		"""
-		Calculate radius of gyration along the trajectory
+		calculate RMSD along the trajectory 
 
-		system - MDAnalysis Universe, trajectory for analysis
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
+		Parameters
+		----------
+		
+		system: MDAnalysis Universe
+			universe for analysis
+
+		step: int
+			trajectory analysis step
+
+		verbose: bool
+			verbose progress
 
 		Also requires:
-		self.protein_sel - one or multiple atom selections for Rg calculation
+		self.protein_sel: str
+			one or multiple atom selections for RMSD calculation
+		self.fit_sel: str
+			atom selection for least squeare fit
 
 		Returns
-		np.array(floats)
-		"""
-
-		# make selection(s)
-		selections = [
-			system.select_atoms(sel) for sel in self.protein_sel
-		]
-
-		# iterate over trj and calculate R
-		Rg_by_frame = []
-		iterator = system.trajectory[::step]	
-		if verbose:
-			print('Calculating gyration radius...')
-		for ts in (tqdm(iterator) if verbose else iterator):
-			Rg_by_frame.append(
-				[sel.radius_of_gyration() for sel in selections]
-			)
-
-		return np.array(Rg_by_frame)
-
-	def CalcRMSD(self, system, step=1, verbose=False):
-		"""
-		Calculate RMSD for a group 
-
-		system - MDAnalysis Universe, trajectory for analysis
-		step - int, step for trajectory analysis
-		verbose - bool, report trajectory analysis progress
-
-		Also requires:
-		self.protein_sel - one or multiple atom selections for RMSD calculation
-		self.fit_sel - atom selection for superimposition
-
-		Returns
+		----------
 		np.array(floats)
 		"""
 
@@ -445,3 +637,5 @@ class ProteinPropertyCalculator:
 		)
 
 		return rms.results.rmsd[:, -len(self.protein_sel):]
+
+	
