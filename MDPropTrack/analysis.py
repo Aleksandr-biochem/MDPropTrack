@@ -828,7 +828,13 @@ class PropertyAnalyser:
 		"""
 
 		# make sure that we have list(str)
-		prop_list = self._check_input(properties_to_plot)
+		prop_list  = self._check_input(properties_to_plot)
+		subplot_by = self._check_input(subplot_by)
+
+		# for convergence plot we use properties for subplotting
+		if plot_convergence:
+			subplot_by = ['Property'] if subplot_by is None \
+						 else ['Property'] + subplot_by
 
 		# define subplot grouping from 'subplot_by' arg
 		if subplot_by is None:
@@ -837,17 +843,19 @@ class PropertyAnalyser:
 			
 			subplot_queries = []
 
-			# tags that are used to group data for subplots
-			grouping_tags = self._check_input(subplot_by)
-
 			# get unique combinations of tags values to query
-			tag_val_combs = list(
-				self.tau_data.groupby(grouping_tags).count().index
-			) if plot_convergence else list(
-				self.data.groupby(grouping_tags).count().index
-			)
+			if plot_convergence:
+				# we also need to filter Property column first
+				tag_val_combs = list(
+					self.tau_data[self.tau_data.Property.isin(prop_list)] \
+					.groupby(subplot_by).count().index
+				) 
+			else:
+				tag_val_combs = list(
+					self.data.groupby(subplot_by).count().index
+				)
 
-			# this shopild be list of tuples
+			# this should be list of tuples
 			if isinstance(tag_val_combs[0], str):
 				tag_val_combs = [(v, ) for v in tag_val_combs]
 
@@ -859,7 +867,7 @@ class PropertyAnalyser:
 
 				# construct query expression
 				query_expr = ' & '.join(
-					[f"{t} == '{v}'" for t, v in zip(grouping_tags, tag_val_comb)]
+					[f"{t} == '{v}'" for t, v in zip(subplot_by, tag_val_comb)]
 				)
 
 				# add additional query if requested
@@ -872,7 +880,7 @@ class PropertyAnalyser:
 
 		# define specifications for each subplot
 		subplot_specs = {}
-		for prop in prop_list:
+		for prop in (['tau'] if plot_convergence else prop_list):
 			for query_name, query_expr in subplot_queries:
 				
 				# define subplot title
