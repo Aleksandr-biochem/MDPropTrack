@@ -133,11 +133,15 @@ class PropertyAnalyser:
 	
 		Returns
 		----------
-		list(str, tuple(str, str), mda.Universe)
+		list(str, tuple(str, str), mda.Universe) or None
 		"""
 
+		# if Noen return None
+		if var is None:
+			var = var
+
 		# if list check taht every element is of supported type
-		if isinstance(var, list):
+		elif isinstance(var, list):
 			for v in var:
 				if self._check_var_type(v):
 					continue
