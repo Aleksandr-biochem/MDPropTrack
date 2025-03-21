@@ -30,6 +30,16 @@ class BaseCalculator:
 		"""
 		pass
 
+	def _reset(self):
+		"""
+		Reset attributes assigned for particular system
+
+		Returns
+		----------
+		self
+		"""
+		pass
+
 	def Calc(self, system, step=1, verbose=False):
 		"""
 		Run calculation by applying self._single_frame()
@@ -64,6 +74,9 @@ class BaseCalculator:
 			results.append(
 				self._single_frame(system)
 			)
+
+		# reset attributes for the analysed system
+		self._reset()
 
 		return np.array(results)
 
@@ -137,6 +150,20 @@ class GyrationRadiusCalculator(BaseCalculator):
 		]
 
 		return property_val
+
+	def _reset(self):
+		"""
+		Reset attributes assigned for particular system
+		Clear selections so that they are not transferred
+		to a different system
+
+		Returns
+		----------
+		self
+		"""
+		self.at_groups = None
+		
+		return self
 
 class LipidPropertyCalculator:
 	"""
