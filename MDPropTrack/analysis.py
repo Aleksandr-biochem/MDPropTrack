@@ -56,17 +56,18 @@ class PropertyAnalyser:
 	):
 
 		# energy files, trajectory files and Universe instances for analysis
-		self.simulations = self._check_input(simulations)
+		self.simulations = [] if (simulations is None) else self._check_input(simulations)
 		
 		# autofill names for simulation steps
 		if tags is None:
 			self.tags = [
 				{'name': f"Simulation_{i}"} for i in range(1, len(self.simulations) + 1)
 			]
+			self.tag_names  = list(self.tags[0].keys()) if len(self.tags) > 0 else []
 		# tags from input
 		else:
 			self.tags = self._transform_tags(tags)
-		self.tag_names  = list(self.tags[0].keys())
+			self.tag_names  = list(self.tags[0].keys())
 
 		# functions to be applied along the trajectory/Universe
 		self.funcs = funcs
