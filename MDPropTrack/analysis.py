@@ -948,6 +948,7 @@ class PropertyAnalyser:
 
 		palette: str, list(str), mplt cmap
 			seaborn colourmap name, a list of colours or mplt cmap
+			'cb_set' will return a colourblind-friendly palette
 		
 		figure_kwargs: dict
 			matplotlib figure kwargs
@@ -988,10 +989,12 @@ class PropertyAnalyser:
 			hue_col = hue
 		
 		# define palette
-		if palette is not None:
+		if palette == 'cb_set':
+			sns_kwargs['palette'] = self._custom_palette
+		elif palette is not None:
 			sns_kwargs['palette'] = palette
 		else:
-			sns_kwargs['palette'] = self._custom_palette
+			sns_kwargs['palette'] = None
 
 		# use clear marker for convergence plot
 		if plot_convergence and ('marker' not in sns_kwargs.keys()):
