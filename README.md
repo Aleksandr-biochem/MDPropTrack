@@ -2,8 +2,9 @@
 
 MDPropTrack is a Python3 mini-library designed to facilitate quick property extraction from Molecular Dynamics trajectories, time series plotting and assessment of convergence.  
 
-**THIS REPOSITORY IS OUTDATED AND IS NOT SUPPORTED ANYMORE. 
-Functionality of `MDPropTrack` is now merged into (`yamdtools` project)[https://github.com/Aleksandr-biochem/yamdtools].
+**THIS REPOSITORY IS OUTDATED AND IS NOT SUPPORTED ANYMORE.**
+
+Functionality of `MDPropTrack` is now merged into [`yamdtools` project](https://github.com/Aleksandr-biochem/yamdtools).
 
 **Contents:**
 1. [What is it convenient for?](#sec1) </br> 
